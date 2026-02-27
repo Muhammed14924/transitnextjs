@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,30 +6,14 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id        String   @id @default(cuid())//uuid()
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(USER)
-  teamId    String?
-  team      Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  //indexes
-  @@index([email])
-  @@index([teamId])
-  @@index([role])
-  //map
-  @@map("users")
-}
-
+// ==========================================
+// 1. نظام الصلاحيات والأمان (من الفيديو)
+// ==========================================
 enum Role {
   ADMIN
+  MANAGER
   USER
   GUEST
-  MANAGER
 }
 
 model Team {
@@ -47,8 +25,258 @@ model Team {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  //indexes
-  @@index([name])
-  //map
   @@map("teams")
+}
+
+// ==========================================
+// 2. جدول المستخدمين (الدمج بين القديم والجديد)
+// ==========================================
+model User {
+  // التعديل هنا: تحويل ID إلى String واستخدام cuid
+  id            String    @id @default(cuid())
+  
+  // --- الحقول الجديدة المطلوبة للوحة التحكم (Dashboard) ---
+  name          String?   @db.VarChar(255)
+  role          Role      @default(USER)
+  teamId        String?
+  team          Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // --- الحقول القديمة من قاعدة بياناتك ---
+  username      String?   @db.VarChar(255)
+  email         String    @unique @db.VarChar(255)
+  password      String    @db.VarChar(255)
+  url           String?
+  bio           String?
+  joined        DateTime? @db.Timestamp(6)
+  number        Int?
+  address       String?
+  private       Int?
+  log           Int?
+  last_activity DateTime? @default(now()) @db.Timestamp(6)
+
+  @@map("users")
+}
+
+// ==========================================
+// 3. الجداول اللوجستية وعمليات الشحن (الخاصة بك)
+// ==========================================
+
+model codes_tables {
+  id           Int        @id
+  code1        String     @db.VarChar(50)
+  code2        String     @db.VarChar(50)
+  code3        String     @db.VarChar(50)
+  name         String     @db.VarChar(200)
+  description  String     @db.VarChar(200)
+  price        Int
+  div_operator Int
+  company      Int
+  item_name    Int
+  comp_items   comp_items @relation(fields: [item_name], references: [id], onDelete: Cascade, map: "codes_tables_ibfk_1")
+  companies    companies  @relation(fields: [company], references: [id], onDelete: Cascade, map: "codes_tables_ibfk_2")
+
+  @@index([company], map: "company")
+  @@index([item_name], map: "item_name")
+}
+
+model comp_items {
+  id              Int              @id
+  internal_code   Int
+  item_ar_name    String           @db.VarChar(50)
+  item_en_name    String           @db.VarChar(50)
+  main_item       Int?
+  company_name    Int
+  price           Decimal?         @default(0.00) @db.Decimal(7, 2)
+  item_type       Int?
+  weight          Int
+  unit            Int              @default(1)
+  package         String           @db.VarChar(50)
+  packet_weight   Int
+  image           String?          @db.VarChar(255)
+  date_exp        DateTime?        @db.Date
+  item_code       Int
+  GTIP            Int?
+  ismain_item     Int              @default(0) @db.SmallInt
+  codes_tables    codes_tables[]
+  companies       companies        @relation(fields: [company_name], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_1")
+  typeofitems     typeofitems?     @relation(fields: [item_type], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_2")
+  tariff_schedule tariff_schedule? @relation(fields: [GTIP], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_3")
+  units           units            @relation(fields: [unit], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_4")
+  material_codes  material_codes[]
+
+  @@index([GTIP], map: "GTIP")
+  @@index([company_name], map: "company_name")
+  @@index([item_type], map: "item_type")
+  @@index([unit], map: "unit")
+}
+
+model companies {
+  id                    Int                 @id
+  company_name          String?             @db.VarChar(100)
+  compen                String              @db.VarChar(100)
+  Sequence1             Int
+  Sequence2             Int
+  place                 String              @db.VarChar(50)
+  company_code          String              @db.VarChar(3)
+  logo                  String?             @db.VarChar(255)
+  first_internal_serial Int
+  codes_tables          codes_tables[]
+  comp_items            comp_items[]
+  trans_2               trans_2[]
+  transit_shipments     transit_shipments[]
+}
+
+model depots {
+  id          Int    @id
+  depot_name  String @db.VarChar(50)
+  depot_place String @db.VarChar(50)
+  depot_code  String @db.VarChar(3)
+}
+
+model destination {
+  id                                       Int       @id
+  destination                              String?   @db.VarChar(50)
+  trans_2_trans_2_destinationTodestination trans_2[] @relation("trans_2_destinationTodestination")
+}
+
+model gates {
+  id                Int                 @id
+  gate_name         String              @db.VarChar(100)
+  transit_shipments transit_shipments[]
+  transport         transport[]
+}
+
+model material_codes {
+  id              Int        @id
+  code_sys1       String     @db.VarChar(100)
+  code_sys2       String     @db.VarChar(100)
+  code_sys3       String     @db.VarChar(100)
+  name            String     @db.VarChar(200)
+  description     String     @db.VarChar(300)
+  division_factor Int
+  GTIP            String     @db.VarChar(12)
+  comp_item       Int
+  comp_items      comp_items @relation(fields: [comp_item], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "material_codes_ibfk_1")
+
+  @@index([comp_item], map: "comp_item")
+}
+
+model ports {
+  id                Int                 @id(map: "ports_pk")
+  port_name         String              @db.VarChar(50)
+  transit_shipments transit_shipments[]
+}
+
+model shipment_comp {
+  id                Int                 @id(map: "shipment_comp_pk")
+  ship_comp         String              @db.VarChar(50)
+  transit_shipments transit_shipments[]
+}
+
+model tariff_schedule {
+  id           Int          @id
+  Customs_item String       @db.VarChar(10)
+  description  String       @db.VarChar(150)
+  Customs_fee  Int
+  Export_fee   Int
+  unit         String       @db.VarChar(10)
+  comp_items   comp_items[]
+}
+
+model traders {
+  id          Int       @id
+  trader      String?   @db.VarChar(50)
+  trader_code String    @db.VarChar(3)
+  trans_2     trans_2[]
+}
+
+model trans_2 {
+  id                                           Int         @id
+  good_name                                    Int
+  trader                                       Int
+  destination                                  Int
+  invoice_num                                  Int
+  count                                        Int
+  weight                                       Int
+  truck_fare                                   Int
+  notes                                        String      @db.VarChar(255)
+  id_car                                       Int
+  companies                                    companies   @relation(fields: [good_name], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "trans_2_ibfk_1")
+  destination_trans_2_destinationTodestination destination @relation("trans_2_destinationTodestination", fields: [destination], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "trans_2_ibfk_2")
+  transport                                    transport   @relation(fields: [id_car], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "trans_2_ibfk_3")
+  traders                                      traders     @relation(fields: [trader], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "trans_2_ibfk_4")
+
+  @@index([destination], map: "Destination")
+  @@index([good_name], map: "good_name")
+  @@index([id_car], map: "id_car")
+  @@index([trader], map: "trader")
+}
+
+model transit_shipments {
+  id                 Int            @id @default(autoincrement())
+  shipping_date      DateTime?      @db.Date
+  arrival_date       DateTime?      @db.Date
+  status             String?        @db.VarChar(50)
+  shipping_company   Int?
+  shipment_number    String?        @db.VarChar(100)
+  container_number   String?        @db.VarChar(100)
+  quantity           Decimal?       @db.Decimal(15, 2)
+  weight             Decimal?       @db.Decimal(15, 2)
+  company_name       Int?
+  goods_description  String?
+  invoice_number     String?        @db.VarChar(100)
+  invoice_date       DateTime?      @db.Date
+  origin             String?        @db.VarChar(100)
+  cadri_invoice      String?        @db.VarChar(100)
+  cadri_invoice_date DateTime?      @db.Date
+  port               Int?
+  crossing_point     Int?
+  head_plate         String?        @db.VarChar(50)
+  trailer_plate      String?        @db.VarChar(50)
+  statement_date     DateTime?      @db.Date
+  companies          companies?     @relation(fields: [company_name], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "transit_shipments_companies_fk")
+  gates              gates?         @relation(fields: [crossing_point], references: [id], onUpdate: SetNull, map: "transit_shipments_gates_fk")
+  ports              ports?         @relation(fields: [port], references: [id], onUpdate: SetNull, map: "transit_shipments_ports_fk")
+  shipment_comp      shipment_comp? @relation(fields: [shipping_company], references: [id], onUpdate: SetNull, map: "transit_shipments_shipment_comp_fk")
+}
+
+model transport {
+  id                                                               Int               @id
+  download_date                                                    DateTime?         @db.Date
+  driver                                                           String            @db.VarChar(50)
+  driver_num                                                       String            @db.VarChar(50)
+  plate_front                                                      String            @db.VarChar(20)
+  plate_back                                                       String            @db.VarChar(20)
+  sort_num                                                         Int
+  discharge_date                                                   DateTime?         @db.Date
+  notes                                                            String            @db.VarChar(255)
+  transport_company                                                Int
+  gate                                                             Int
+  car_id                                                           Int
+  trans_2                                                          trans_2[]
+  gates                                                            gates             @relation(fields: [gate], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "transport_ibfk_1")
+  transport_company_transport_transport_companyTotransport_company transport_company @relation("transport_transport_companyTotransport_company", fields: [transport_company], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "transport_ibfk_2")
+
+  @@index([gate], map: "gate")
+}
+
+model transport_company {
+  id                                                       Int         @id
+  trans_name                                               String      @db.VarChar(50)
+  transport_transport_transport_companyTotransport_company transport[] @relation("transport_transport_companyTotransport_company")
+}
+
+model typeofitems {
+  id         Int          @id
+  item_type  String       @db.VarChar(50)
+  typecode   String       @db.VarChar(3)
+  comp_items comp_items[]
+}
+
+model units {
+  id         Int          @id
+  unit_name  String       @default("طرد") @db.VarChar(50)
+  comp_items comp_items[]
 }
