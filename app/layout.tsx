@@ -34,19 +34,15 @@
 // }
 // app/layout.tsx
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Cairo } from "next/font/google"; // قمنا باستيراد خط كايرو من جوجل
 import "./globals.css";
 import { AuthProvider } from "./providers/AuthProvider";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
+// إعداد الخط لدعم اللغتين العربية والإنجليزية
+const cairo = Cairo({
+  subsets: ["arabic", "latin"],
+  weight: ["300", "400", "600", "700"],
+  variable: "--font-cairo",
 });
 
 export const metadata: Metadata = {
@@ -61,8 +57,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl">
+      {/* تطبيق الخط على كامل التطبيق */}
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${cairo.className} antialiased bg-slate-50 text-slate-900`}
       >
         <AuthProvider>{children}</AuthProvider>
       </body>
