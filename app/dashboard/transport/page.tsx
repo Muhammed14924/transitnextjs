@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -14,12 +14,7 @@ import {
   Fuel,
   Settings2,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -39,53 +34,30 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { cn } from "@/app/lib/utils";
-
-const initialTransport = [
-  {
-    id: "VH-701",
-    plate: "أ ب ج 1234",
-    type: "شاحنة ثقيلة",
-    driver: "محمد العتيبي",
-    status: "في رحلة",
-    location: "طريق الرياض - الدمام",
-    lastMaintenance: "2024-02-15",
-    fuel: "75%",
-  },
-  {
-    id: "VH-902",
-    plate: "د هـ و 5678",
-    type: "شاحنة مبردة",
-    driver: "سعد الشهري",
-    status: "متاح",
-    location: "مستودعات جدة",
-    lastMaintenance: "2024-03-01",
-    fuel: "100%",
-  },
-  {
-    id: "VH-405",
-    plate: "س ش ص 9012",
-    type: "ناقلة مواد سائلة",
-    driver: "يوسف خليل",
-    status: "في صيانة",
-    location: "ورشة الرياض المركزية",
-    lastMaintenance: "2024-03-24",
-    fuel: "20%",
-  },
-  {
-    id: "VH-118",
-    plate: "ق ر ش 2468",
-    type: "شاحنة حاويات",
-    driver: "فهد الدوسري",
-    status: "في رحلة",
-    location: "ميناء الملك عبد العزيز",
-    lastMaintenance: "2024-01-20",
-    fuel: "45%",
-  },
-];
+import { apiClient } from "@/app/lib/api-client";
 
 export default function TransportPage() {
-  const [transportData] = useState(initialTransport);
+  const [transportData, setTransportData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const fetchTransport = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await apiClient.getTransport(searchTerm);
+      if (data) {
+        setTransportData(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch transport", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchTransport();
+  }, [fetchTransport]);
 
   return (
     <div className="space-y-6">
@@ -107,25 +79,25 @@ export default function TransportPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <TransportStatCard
           title="إجمالي الأسطول"
-          value="48"
+          value={loading ? "..." : transportData.length.toString()}
           icon={<Truck className="text-blue-600" size={18} />}
           color="blue"
         />
         <TransportStatCard
           title="مركبات نشطة"
-          value="32"
+          value={loading ? "..." : transportData.length.toString()}
           icon={<Activity className="text-emerald-600" size={18} />}
           color="emerald"
         />
         <TransportStatCard
-          title="تحت الصيانة"
-          value="6"
+          title="بوابة العبور"
+          value={loading ? "..." : transportData[0]?.gates?.gate_name || "N/A"}
           icon={<Settings2 className="text-amber-600" size={18} />}
           color="amber"
         />
         <TransportStatCard
           title="الأمان والسلامة"
-          value="98%"
+          value="100%"
           icon={<ShieldCheck className="text-blue-600" size={18} />}
           color="blue"
         />
@@ -148,15 +120,10 @@ export default function TransportPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
+              onClick={() => fetchTransport()}
               className="h-10 rounded-xl gap-2 border-slate-200 text-slate-600 hover:bg-slate-50"
             >
-              سجل الصيانة
-            </Button>
-            <Button
-              variant="outline"
-              className="h-10 rounded-xl gap-2 border-slate-200 text-slate-600 hover:bg-slate-50"
-            >
-              عرض الخارطة
+              تحديث البيانات
             </Button>
           </div>
         </CardHeader>
@@ -168,19 +135,16 @@ export default function TransportPage() {
                   رقم اللوحة
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
-                  النوع
+                  السائق
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
-                  السائق
+                  رقم الهاتف
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
                   الحالة
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
-                  الموقع الحالي
-                </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 h-10 text-xs text-center">
-                  الوقود
+                  البوابة
                 </TableHead>
                 <TableHead className="text-left font-bold text-slate-700 h-10 px-6">
                   الإجراءات
@@ -188,133 +152,120 @@ export default function TransportPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transportData.map((vh) => (
-                <TableRow
-                  key={vh.id}
-                  className="cursor-pointer hover:bg-slate-50/30 transition-colors border-slate-50 h-[70px] group text-sm"
-                >
-                  <TableCell>
-                    <div className="flex flex-col gap-0.5">
+              {transportData.length > 0 ? (
+                transportData.map((vh) => (
+                  <TableRow
+                    key={vh.id}
+                    className="cursor-pointer hover:bg-slate-50/30 transition-colors border-slate-50 h-[70px] group text-sm"
+                  >
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className="font-bold text-slate-900 border border-slate-300 px-1.5 py-0.5 rounded bg-white shadow-sm w-fit inline-block tracking-widest text-xs"
+                          dir="ltr"
+                        >
+                          {vh.plate_number_ar} | {vh.plate_number_en}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">
+                          TR-{vh.id}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-7 w-7 border border-slate-100 shadow-sm">
+                          <AvatarFallback className="bg-primary/5 text-primary text-[10px] uppercase font-bold">
+                            {vh.driver_name?.substring(0, 1) || "D"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-semibold text-slate-700 inline-block">
+                          {vh.driver_name}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <span
-                        className="font-bold text-slate-900 border border-slate-300 px-1.5 py-0.5 rounded bg-white shadow-sm w-fit inline-block tracking-widest text-xs"
+                        className="text-xs text-slate-500 font-medium tabular-nums"
                         dir="ltr"
                       >
-                        {vh.plate}
+                        {vh.driver_number}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">
-                        {vh.id}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-slate-600 font-medium text-xs bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 shadow-inner inline-block">
-                      {vh.type}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-7 w-7 border border-slate-100 shadow-sm">
-                        <AvatarFallback className="bg-primary/5 text-primary text-[10px] uppercase font-bold">
-                          {vh.driver.substring(0, 1)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-semibold text-slate-700 inline-block">
-                        {vh.driver}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={cn(
-                        "rounded-full font-bold px-3 py-0 h-6 border-none shadow-sm flex items-center gap-1.5 w-fit",
-                        vh.status === "في رحلة"
-                          ? "bg-blue-100 text-blue-700"
-                          : vh.status === "متاح"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-amber-100 text-amber-700",
-                      )}
-                    >
-                      <div
+                    </TableCell>
+                    <TableCell>
+                      <Badge
                         className={cn(
-                          "w-1.5 h-1.5 rounded-full",
-                          vh.status === "في رحلة"
-                            ? "bg-blue-700"
-                            : vh.status === "متاح"
-                              ? "bg-emerald-700"
-                              : "bg-amber-700",
+                          "rounded-full font-bold px-3 py-0 h-6 border-none shadow-sm flex items-center gap-1.5 w-fit bg-emerald-100 text-emerald-700",
                         )}
-                      ></div>
-                      {vh.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <MapPin size={14} className="text-primary/40 shrink-0" />
-                      <span className="truncate max-w-[120px]">
-                        {vh.location}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden border border-slate-200 shadow-inner">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all duration-500",
-                            parseInt(vh.fuel) < 30
-                              ? "bg-rose-500"
-                              : "bg-emerald-500",
-                          )}
-                          style={{ width: vh.fuel }}
-                        ></div>
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-700"></div>
+                        نشط/مستمر
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <MapPin
+                          size={14}
+                          className="text-primary/40 shrink-0"
+                        />
+                        <span className="truncate max-w-[120px]">
+                          {vh.gates?.gate_name || "N/A"}
+                        </span>
                       </div>
-                      <span className="text-[10px] font-black text-slate-600 tabular-nums flex items-center gap-1 whitespace-nowrap">
-                        <Fuel size={10} className="text-slate-300" /> {vh.fuel}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-6">
-                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg"
-                      >
-                        <User size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-blue-600 rounded-lg"
-                      >
-                        <Calendar size={16} />
-                      </Button>
-                      <DropdownMenu dir="rtl">
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-400 rounded-lg"
-                          >
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="w-32 rounded-xl"
+                    </TableCell>
+                    <TableCell className="px-6">
+                      <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg"
                         >
-                          <DropdownMenuItem className="p-2 gap-2 focus:bg-slate-50 rounded-lg text-xs">
-                            تعديل البيانات
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="p-2 gap-2 focus:bg-slate-50 rounded-lg text-xs">
-                            سجل المهام
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                          <User size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-blue-600 rounded-lg"
+                        >
+                          <Calendar size={16} />
+                        </Button>
+                        <DropdownMenu dir="rtl">
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 rounded-lg"
+                            >
+                              <MoreVertical size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-32 rounded-xl"
+                          >
+                            <DropdownMenuItem className="p-2 gap-2 focus:bg-slate-50 rounded-lg text-xs">
+                              تعديل البيانات
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="p-2 gap-2 focus:bg-rose-50 text-rose-600 rounded-lg text-xs">
+                              حذف المركبة
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-20 text-slate-400"
+                  >
+                    {loading
+                      ? "جاري تحميل المركبات..."
+                      : "لا توجد مركبات مسجلة"}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

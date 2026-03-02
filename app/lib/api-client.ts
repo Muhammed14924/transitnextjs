@@ -85,6 +85,13 @@ class ApiClient {
     return this.request(url);
   }
 
+  async createCompany(data: any) {
+    return this.request("/api/companies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   // Products
   async getProducts(params?: { companyId?: number; q?: string }) {
     const searchParams = new URLSearchParams();
@@ -92,6 +99,13 @@ class ApiClient {
       searchParams.append("companyId", params.companyId.toString());
     if (params?.q) searchParams.append("q", params.q);
     return this.request(`/api/products?${searchParams.toString()}`);
+  }
+
+  async createProduct(data: any) {
+    return this.request("/api/products", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   // Transport
@@ -102,10 +116,37 @@ class ApiClient {
     return this.request(url);
   }
 
+  async createTransport(data: any) {
+    return this.request("/api/transport", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   // Traders
   async getTraders(q?: string) {
     const url = q ? `/api/traders?q=${encodeURIComponent(q)}` : "/api/traders";
     return this.request(url);
+  }
+
+  async createTrader(data: any) {
+    return this.request("/api/traders", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Users
+  async getUsers(q?: string) {
+    const url = q ? `/api/user?q=${encodeURIComponent(q)}` : "/api/user";
+    return this.request(url);
+  }
+
+  async inviteUser(data: any) {
+    return this.request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 }
 

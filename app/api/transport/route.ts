@@ -42,3 +42,49 @@ export async function GET(req: Request) {
     );
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role === "GUEST") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+
+    // Generate ID since it's not autoincremented in schema
+    const maxIdResult = await prisma.transport.aggregate({
+      _max: { id: true },
+    });
+    const nextId = (maxIdResult._max.id || 0) + 1;
+
+    const transport = await prisma.transport.create({
+      data: {
+        id: nextId,
+        driver: body.driver,
+        driver_num: body.driver_num || "N/A",
+        plate_front: body.plate_front || "N/A",
+        plate_back: body.plate_back || "N/A",
+        sort_num: body.sort_num || 0,
+        notes: body.notes || "",
+        transport_company: body.transport_company, // Int (Foreign Key)
+        gate: body.gate, // Int (Foreign Key)
+        car_id: body.car_id || nextId,
+        download_date: body.download_date
+          ? new Date(body.download_date)
+          : new Date(),
+        discharge_date: body.discharge_date
+          ? new Date(body.discharge_date)
+          : undefined,
+      },
+    });
+
+    return NextResponse.json(transport);
+  } catch (error) {
+    console.error("Transport API POST error:", error);
+    return NextResponse.json(
+      { error: "Error creating transport record" },
+      { status: 500 },
+    );
+  }
+}

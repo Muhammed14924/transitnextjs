@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -12,13 +12,7 @@ import {
   Tag,
   Box,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/app/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -37,49 +31,30 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { cn } from "@/app/lib/utils";
-
-const initialProducts = [
-  {
-    id: "MAT-001",
-    name: "مواد بناء أولية",
-    type: "مواد خام",
-    unit: "طن",
-    count: 250,
-    company: "شركة التطوير اللوجستي",
-    category: "أسمنت",
-  },
-  {
-    id: "EQP-442",
-    name: "معدات طبية متقدمة",
-    type: "أجهزة تخصصية",
-    unit: "قطعة",
-    count: 12,
-    company: "مؤسسة الشفاء الدولية",
-    category: "رعاية صحية",
-  },
-  {
-    id: "FRN-921",
-    name: "أثاث مكتبي فاخر",
-    type: "كماليات",
-    unit: "طقم",
-    count: 85,
-    company: "أسواق الرياض المركزية",
-    category: "تأثيث",
-  },
-  {
-    id: "CHEM-105",
-    name: "مواد تنظيف صناعية",
-    type: "مواد كيميائية",
-    unit: "لتر",
-    count: 1500,
-    company: "مصنع الأمان للمواد الكيميائية",
-    category: "صيانة",
-  },
-];
+import { apiClient } from "@/app/lib/api-client";
 
 export default function ProductsPage() {
-  const [products] = useState(initialProducts);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await apiClient.getProducts({ q: searchTerm });
+      if (data) {
+        setProducts(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch products", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   return (
     <div className="space-y-6">
@@ -96,6 +71,7 @@ export default function ProductsPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => fetchProducts()}
             className="rounded-xl h-10 border-slate-200 text-slate-600 font-medium"
           >
             تحديث البيانات
@@ -108,58 +84,44 @@ export default function ProductsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-          <div className="flex flex-col">
-            <span className="text-slate-400 text-xs font-semibold mb-1 uppercase tracking-tight">
-              إجمالي الأصناف
-            </span>
-            <span className="text-2xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
-              1,482
-            </span>
-          </div>
-          <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 shadow-sm">
-            <Box size={20} />
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-          <div className="flex flex-col">
-            <span className="text-slate-400 text-xs font-semibold mb-1 uppercase tracking-tight">
-              قيد الطلب
-            </span>
-            <span className="text-2xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
-              42
-            </span>
-          </div>
-          <div className="h-10 w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center border border-amber-100 shadow-sm">
-            <Tag size={20} />
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-          <div className="flex flex-col">
-            <span className="text-slate-400 text-xs font-semibold mb-1 uppercase tracking-tight">
-              المواد الخام
-            </span>
-            <span className="text-2xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
-              850
-            </span>
-          </div>
-          <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center border border-emerald-100 shadow-sm">
-            <LayoutGrid size={20} />
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-          <div className="flex flex-col">
-            <span className="text-slate-400 text-xs font-semibold mb-1 uppercase tracking-tight">
-              معدل الدوران
-            </span>
-            <span className="text-2xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
-              High
-            </span>
-          </div>
-          <div className="h-10 w-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center border border-rose-100 shadow-sm">
-            <BarChart2 size={20} />
-          </div>
-        </div>
+        <ProductStatCard
+          title="إجمالي الأصناف"
+          value={loading ? "..." : products.length.toString()}
+          icon={<Box size={20} />}
+          color="blue"
+        />
+        <ProductStatCard
+          title="متوفر حالياً"
+          value={
+            loading
+              ? "..."
+              : products.filter((p) => p.count > 0).length.toString()
+          }
+          icon={<Tag size={20} />}
+          color="amber"
+        />
+        <ProductStatCard
+          title="فئات المنتجات"
+          value={
+            loading
+              ? "..."
+              : new Set(
+                  products.map((p) => p.item_types?.item_type),
+                ).size.toString()
+          }
+          icon={<LayoutGrid size={20} />}
+          color="emerald"
+        />
+        <ProductStatCard
+          title="الشركات المتعاونة"
+          value={
+            loading
+              ? "..."
+              : new Set(products.map((p) => p.company_id)).size.toString()
+          }
+          icon={<BarChart2 size={20} />}
+          color="rose"
+        />
       </div>
 
       <Card className="border-slate-100 shadow-sm rounded-2xl overflow-hidden hover:shadow-md transition-shadow duration-300">
@@ -185,13 +147,6 @@ export default function ProductsPage() {
               <ListFilter size={16} />
               <span>تصفية متقدمة</span>
             </Button>
-            <div className="h-10 px-3 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700">
-              <span>عرض الأصناف بـ:</span>
-              <select className="bg-transparent border-none focus:outline-none text-primary font-bold">
-                <option>جدول</option>
-                <option>شبكة</option>
-              </select>
-            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -205,9 +160,6 @@ export default function ProductsPage() {
                   اسم الصنف
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-11 text-xs">
-                  نوع المادة
-                </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 h-11 text-xs">
                   الشركة المالكة
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-11 text-xs text-center">
@@ -219,94 +171,102 @@ export default function ProductsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
-                <TableRow
-                  key={product.id}
-                  className="cursor-pointer hover:bg-slate-50/30 transition-colors border-slate-50 h-[70px] group"
-                >
-                  <TableCell>
-                    <span className="font-bold text-slate-400 text-xs tracking-wider">
-                      {product.id}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-bold text-slate-900 text-sm">
-                        {product.name}
+              {products.length > 0 ? (
+                products.map((product) => (
+                  <TableRow
+                    key={product.id}
+                    className="cursor-pointer hover:bg-slate-50/30 transition-colors border-slate-50 h-[70px] group"
+                  >
+                    <TableCell>
+                      <span className="font-bold text-slate-400 text-xs tracking-wider">
+                        {product.item_code || `PRD-${product.id}`}
                       </span>
-                      <div className="flex items-center gap-1">
-                        <Badge
-                          variant="secondary"
-                          className="h-4 px-1.5 py-0 text-[9px] bg-slate-100 text-slate-500 font-bold border-none capitalize"
-                        >
-                          {product.category}
-                        </Badge>
-                        <span className="text-[9px] text-slate-400 font-medium">
-                          /{product.unit}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-bold text-slate-900 text-sm">
+                          {product.item_name}
                         </span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-xs text-slate-500 font-medium bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                      {product.type}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-xs font-semibold text-slate-600">
-                      {product.company}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span
-                      className={cn(
-                        "font-black text-sm tabular-nums",
-                        product.count < 50 ? "text-rose-600" : "text-slate-900",
-                      )}
-                    >
-                      {product.count.toLocaleString()}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-6">
-                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg"
-                      >
-                        <PackageSearch size={16} />
-                      </Button>
-                      <DropdownMenu dir="rtl">
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-400 rounded-lg"
+                        <div className="flex items-center gap-1">
+                          <Badge
+                            variant="secondary"
+                            className="h-4 px-1.5 py-0 text-[9px] bg-slate-100 text-slate-500 font-bold border-none capitalize"
                           >
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="w-32 rounded-xl"
+                            {product.item_types?.item_type || "صنف عام"}
+                          </Badge>
+                          <span className="text-[9px] text-slate-400 font-medium">
+                            /{product.units?.unit_name || "طرد"}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {product.companies?.company_name || "N/A"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span
+                        className={cn(
+                          "font-black text-sm tabular-nums",
+                          product.count < 50
+                            ? "text-rose-600"
+                            : "text-slate-900",
+                        )}
+                      >
+                        {Number(product.count || 0).toLocaleString()}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-6">
+                      <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg"
                         >
-                          <DropdownMenuItem className="p-2 text-xs focus:bg-slate-50 rounded-lg gap-2">
-                            تعديل الصنف
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="p-2 text-xs focus:bg-rose-50 text-rose-600 rounded-lg gap-2">
-                            حذف
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                          <PackageSearch size={16} />
+                        </Button>
+                        <DropdownMenu dir="rtl">
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 rounded-lg"
+                            >
+                              <MoreVertical size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-32 rounded-xl"
+                          >
+                            <DropdownMenuItem className="p-2 text-xs focus:bg-slate-50 rounded-lg gap-2">
+                              تعديل الصنف
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="p-2 text-xs focus:bg-rose-50 text-rose-600 rounded-lg gap-2">
+                              حذف
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-20 text-slate-400"
+                  >
+                    {loading ? "جاري تحميل الأصناف..." : "لا توجد منتجات مسجلة"}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
           <div className="px-6 py-6 border-t border-slate-50 bg-slate-50/10 flex items-center justify-between">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-              Products Inventory Module v1.0
+              نظام إدارة المخزون v1.0
             </span>
             <div className="flex items-center gap-1 text-[10px] font-bold text-primary">
               <span>تحديث تلقائي مفعل</span>
@@ -315,6 +275,36 @@ export default function ProductsPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ProductStatCard({ title, value, icon, color }: any) {
+  const colorMap: any = {
+    blue: "bg-blue-50 text-blue-600 border-blue-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    rose: "bg-rose-50 text-rose-600 border-rose-100",
+  };
+
+  return (
+    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
+      <div className="flex flex-col">
+        <span className="text-slate-400 text-xs font-semibold mb-1 uppercase tracking-tight">
+          {title}
+        </span>
+        <span className="text-2xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
+          {value}
+        </span>
+      </div>
+      <div
+        className={cn(
+          "h-10 w-10 rounded-xl flex items-center justify-center border shadow-sm",
+          colorMap[color],
+        )}
+      >
+        {icon}
+      </div>
     </div>
   );
 }

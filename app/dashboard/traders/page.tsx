@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -14,12 +14,7 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -33,43 +28,30 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { cn } from "@/app/lib/utils";
-
-const initialTraders = [
-  {
-    id: "TRD-01",
-    name: "سالم المنصور",
-    city: "الرياض",
-    phone: "055-123-4567",
-    email: "salem@example.sa",
-    totalDeals: 124,
-    status: "مميز",
-    lastDeal: "2024-03-20",
-  },
-  {
-    id: "TRD-02",
-    name: "عمر الراجحي",
-    city: "جدة",
-    phone: "050-987-6543",
-    email: "omar@traders.com",
-    totalDeals: 85,
-    status: "نشط",
-    lastDeal: "2024-03-24",
-  },
-  {
-    id: "TRD-03",
-    name: "خالد بن فهد",
-    city: "جيزان",
-    phone: "053-444-5555",
-    email: "khaled@sa.sa",
-    totalDeals: 12,
-    status: "جديد",
-    lastDeal: "2024-03-25",
-  },
-];
+import { apiClient } from "@/app/lib/api-client";
 
 export default function TradersPage() {
-  const [traders] = useState(initialTraders);
+  const [traders, setTraders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const fetchTraders = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await apiClient.getTraders(searchTerm);
+      if (data) {
+        setTraders(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch traders", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchTraders();
+  }, [fetchTraders]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -91,23 +73,29 @@ export default function TradersPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <TraderSummaryCard
           title="إجمالي التجار"
-          value="842"
+          value={loading ? "..." : traders.length.toString()}
           icon={<Users className="text-blue-600" size={18} />}
-          trend="+12 جديد"
+          trend="نشط"
           border="border-blue-100"
         />
         <TraderSummaryCard
           title="إجمالي المعاملات"
-          value="1.5M"
+          value={
+            loading
+              ? "..."
+              : traders
+                  .reduce((acc, t) => acc + (t._count?.trans_2 || 0), 0)
+                  .toString()
+          }
           icon={<ShoppingBag className="text-emerald-600" size={18} />}
-          trend="+4.2% نمو"
+          trend="تراكمي"
           border="border-emerald-100"
         />
         <TraderSummaryCard
-          title="المدفوعات الآجلة"
-          value="284K"
+          title="أحدث تاجر"
+          value={loading ? "..." : traders[0]?.trader_name || "لا يوجد"}
           icon={<CreditCard className="text-amber-600" size={18} />}
-          trend="-10% انخفاض"
+          trend="جديد"
           border="border-amber-100"
         />
       </div>
@@ -129,9 +117,10 @@ export default function TradersPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
+              onClick={() => fetchTraders()}
               className="h-10 rounded-xl gap-2 border-slate-200 text-slate-600 hover:bg-slate-50"
             >
-              تحميل السجل
+              تحديث البيانات
             </Button>
           </div>
         </CardHeader>
@@ -142,11 +131,8 @@ export default function TradersPage() {
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
                   كود التاجر
                 </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
-                  الاسم
-                </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs text-center">
-                  الموقع
+                  الاسم
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-10 text-xs">
                   معلومات التواصل
@@ -163,97 +149,95 @@ export default function TradersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {traders.map((trader) => (
-                <TableRow
-                  key={trader.id}
-                  className="hover:bg-slate-50/20 transition-colors border-slate-50 h-[70px] group text-sm"
-                >
-                  <TableCell>
-                    <span className="font-bold text-slate-400 text-xs tracking-wider">
-                      {trader.id}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8 rounded-full border border-slate-100 bg-white">
-                        <AvatarFallback className="text-[10px] text-primary font-black uppercase">
-                          {trader.name.substring(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-bold text-slate-900 inline-block">
-                        {trader.name}
+              {traders.length > 0 ? (
+                traders.map((trader) => (
+                  <TableRow
+                    key={trader.id}
+                    className="hover:bg-slate-50/20 transition-colors border-slate-50 h-[70px] group text-sm"
+                  >
+                    <TableCell>
+                      <span className="font-bold text-slate-400 text-xs tracking-wider">
+                        {trader.trader_code || `TRD-${trader.id}`}
                       </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="inline-flex items-center gap-1 text-slate-500 font-medium">
-                      <MapPin size={12} className="text-primary/40" />
-                      <span className="text-xs">{trader.city}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
-                        <Phone size={12} className="text-slate-300" />
-                        <span dir="ltr" className="font-medium">
-                          {trader.phone}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 justify-center">
+                        <Avatar className="h-8 w-8 rounded-full border border-slate-100 bg-white">
+                          <AvatarFallback className="text-[10px] text-primary font-black uppercase">
+                            {trader.trader_name?.substring(0, 2) || "TR"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-bold text-slate-900 inline-block">
+                          {trader.trader_name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                        <Mail size={12} className="text-slate-300" />
-                        <span className="truncate max-w-[120px]">
-                          {trader.email}
-                        </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                          <Phone size={12} className="text-slate-300" />
+                          <span dir="ltr" className="font-medium">
+                            N/A
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                          <Mail size={12} className="text-slate-300" />
+                          <span className="truncate max-w-[120px]">N/A</span>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={cn(
-                        "rounded-full font-bold px-2.5 py-0 h-6 border-none shadow-sm",
-                        trader.status === "مميز"
-                          ? "bg-amber-100 text-amber-700"
-                          : trader.status === "نشط"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-blue-100 text-blue-700",
-                      )}
-                    >
-                      {trader.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="inline-flex items-center gap-1 text-slate-900 font-black tabular-nums">
-                      <TrendingUp size={14} className="text-emerald-500" />
-                      {trader.totalDeals}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-6">
-                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg border border-transparent hover:border-slate-100"
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "rounded-full font-bold px-2.5 py-0 h-6 border-none shadow-sm bg-emerald-100 text-emerald-700",
+                        )}
                       >
-                        <History size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-blue-600 rounded-lg"
-                      >
-                        <Plus size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 rounded-lg"
-                      >
-                        <MoreVertical size={16} />
-                      </Button>
-                    </div>
+                        نشط
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="inline-flex items-center gap-1 text-slate-900 font-black tabular-nums">
+                        <TrendingUp size={14} className="text-emerald-500" />
+                        {trader._count?.trans_2 || 0} عملية
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-6">
+                      <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg border border-transparent hover:border-slate-100"
+                        >
+                          <History size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-blue-600 rounded-lg"
+                        >
+                          <Plus size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 rounded-lg"
+                        >
+                          <MoreVertical size={16} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-20 text-slate-400"
+                  >
+                    {loading ? "جاري تحميل التجار..." : "لا يوجد تجار مسجلين"}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

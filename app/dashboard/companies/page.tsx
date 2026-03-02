@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -17,12 +17,7 @@ import {
   TrendingUp,
   ShieldCheck,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -42,57 +37,30 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { cn } from "@/app/lib/utils";
-
-const initialCompanies = [
-  {
-    id: "COMP-001",
-    name: "شركة التطوير اللوجستي",
-    category: "نقل بري",
-    location: "الرياض، الملز",
-    phone: "011-234-5678",
-    email: "info@logidev.sa",
-    status: "نشط",
-    shipments: 42,
-    rating: 4.8,
-  },
-  {
-    id: "COMP-002",
-    name: "مؤسسة النور للاستيراد",
-    category: "تجارة عامة",
-    location: "جدة، حي الشاطئ",
-    phone: "012-987-6543",
-    email: "contact@alnoor.com",
-    status: "نشط",
-    shipments: 128,
-    rating: 4.5,
-  },
-  {
-    id: "COMP-003",
-    name: "مجموعة الصناعات العربية",
-    category: "تصنيع ومواد خام",
-    location: "الجبيل الصناعية",
-    phone: "013-444-1111",
-    email: "supply@arabind.sa",
-    status: "غير نشط",
-    shipments: 15,
-    rating: 3.9,
-  },
-  {
-    id: "COMP-004",
-    name: "ناقلات الخليج السريعة",
-    category: "شحن بحري",
-    location: "الدمام، ميناء الملك عبد العزيز",
-    phone: "013-888-2222",
-    email: "ops@gulfexpress.sa",
-    status: "نشط",
-    shipments: 89,
-    rating: 4.9,
-  },
-];
+import { apiClient } from "@/app/lib/api-client";
 
 export default function CompaniesPage() {
-  const [companies] = useState(initialCompanies);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const fetchCompanies = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await apiClient.getCompanies(searchTerm);
+      if (data) {
+        setCompanies(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch companies", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
 
   return (
     <div className="space-y-6">
@@ -114,21 +82,21 @@ export default function CompaniesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <CompanyStatCard
           title="إجمالي الشركات"
-          value="156"
+          value={loading ? "..." : companies.length.toString()}
           icon={<Building2 className="text-blue-600" size={20} />}
-          detail="+5 شركات هذا الشهر"
+          detail="قائمة الشركات المسجلة"
         />
         <CompanyStatCard
           title="شركات نشطة حالياً"
-          value="142"
+          value={loading ? "..." : companies.length.toString()}
           icon={<ShieldCheck className="text-emerald-600" size={20} />}
-          detail="91% من الإجمالي"
+          detail="جاهزة للعمل"
         />
         <CompanyStatCard
-          title="أكثر القطاعات طلباً"
-          value="نقل المواد"
+          title="أحدث الشركات"
+          value={loading ? "..." : companies[0]?.company_name || "لا يوجد"}
           icon={<Briefcase className="text-amber-600" size={20} />}
-          detail="بزيادة 15% عاقد"
+          detail="آخر إضافة لنظام"
         />
       </div>
 
@@ -163,7 +131,7 @@ export default function CompaniesPage() {
                   اسم الشركة
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-12">
-                  القطاع
+                  الشحنات/المنتجات
                 </TableHead>
                 <TableHead className="text-right font-bold text-slate-700 h-12">
                   الموقع
@@ -174,123 +142,123 @@ export default function CompaniesPage() {
                 <TableHead className="text-right font-bold text-slate-700 h-12">
                   الحالة
                 </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 h-12 text-center">
-                  إجمالي الشحنات
-                </TableHead>
                 <TableHead className="text-left font-bold text-slate-700 h-12 px-6">
                   الإجراءات
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {companies.map((company) => (
-                <TableRow
-                  key={company.id}
-                  className="hover:bg-slate-50/50 transition-colors border-slate-100 h-16 group"
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9 rounded-xl border border-slate-100">
-                        <AvatarFallback className="bg-primary/5 text-primary font-bold text-xs uppercase">
-                          {company.name.substring(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-900 text-sm">
-                          {company.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium tracking-tight uppercase">
-                          {company.id}
-                        </span>
+              {companies.length > 0 ? (
+                companies.map((company) => (
+                  <TableRow
+                    key={company.id}
+                    className="hover:bg-slate-50/50 transition-colors border-slate-100 h-16 group"
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9 rounded-xl border border-slate-100">
+                          <AvatarFallback className="bg-primary/5 text-primary font-bold text-xs uppercase">
+                            {company.company_name?.substring(0, 2) || "CO"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900 text-sm">
+                            {company.company_name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium tracking-tight uppercase">
+                            {company.company_code}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="rounded-lg h-6 border-slate-200 text-slate-500 font-medium text-xs"
-                    >
-                      {company.category}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <MapPin size={14} className="text-slate-300" />
-                      <span>{company.location}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
-                        <Phone size={12} className="text-slate-400" />
-                        <span dir="ltr">{company.phone}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="inline-flex items-center gap-1 font-bold text-slate-700">
+                        <TrendingUp size={14} className="text-emerald-500" />
+                        {company._count?.transit_shipments || 0} شحنة /{" "}
+                        {company._count?.comp_items || 0} صنف
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                        <Mail size={12} className="text-slate-400" />
-                        <span>{company.email}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <MapPin size={14} className="text-slate-300" />
+                        <span>{company.place}</span>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={cn(
-                        "rounded-full font-bold px-3 py-0 h-6 border-none",
-                        company.status === "نشط"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-slate-100 text-slate-500",
-                      )}
-                    >
-                      {company.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="inline-flex items-center gap-1 font-bold text-slate-700">
-                      <TrendingUp size={14} className="text-emerald-500" />
-                      {company.shipments}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-6">
-                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg"
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                          <Phone size={12} className="text-slate-400" />
+                          <span dir="ltr">N/A</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                          <Mail size={12} className="text-slate-400" />
+                          <span>N/A</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "rounded-full font-bold px-3 py-0 h-6 border-none bg-emerald-50 text-emerald-600",
+                        )}
                       >
-                        <ExternalLink size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-blue-600 rounded-lg"
-                      >
-                        <Edit size={16} />
-                      </Button>
-                      <DropdownMenu dir="rtl">
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-400 rounded-lg"
-                          >
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="w-40 rounded-xl"
+                        نشط
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-6">
+                      <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-primary rounded-lg"
                         >
-                          <DropdownMenuItem className="gap-2 p-2 text-sm focus:bg-slate-50 rounded-lg">
-                            <Globe size={14} /> زيارة الموقع
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2 p-2 text-sm focus:bg-rose-50 text-rose-600 rounded-lg">
-                            <Trash2 size={14} /> حذف الشركة
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                          <ExternalLink size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-blue-600 rounded-lg"
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <DropdownMenu dir="rtl">
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 rounded-lg"
+                            >
+                              <MoreVertical size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-40 rounded-xl"
+                          >
+                            <DropdownMenuItem className="gap-2 p-2 text-sm focus:bg-slate-50 rounded-lg">
+                              <Globe size={14} /> زيارة الموقع
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2 p-2 text-sm focus:bg-rose-50 text-rose-600 rounded-lg">
+                              <Trash2 size={14} /> حذف الشركة
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-20 text-slate-400"
+                  >
+                    {loading
+                      ? "جاري تحميل البيانات..."
+                      : "لا توجد شركات حالياً"}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

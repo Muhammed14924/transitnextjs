@@ -55,3 +55,45 @@ export async function GET(req: Request) {
     );
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role === "GUEST") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+
+    // Generate ID since it's not autoincremented in schema
+    const maxIdResult = await prisma.comp_items.aggregate({
+      _max: { id: true },
+    });
+    const nextId = (maxIdResult._max.id || 0) + 1;
+
+    const product = await prisma.comp_items.create({
+      data: {
+        id: nextId,
+        item_ar_name: body.item_ar_name,
+        item_en_name: body.item_en_name || body.item_ar_name,
+        internal_code: body.internal_code || nextId,
+        company_name: body.company_name, // Int (Foreign Key)
+        item_code: body.item_code || nextId,
+        weight: body.weight || 0,
+        package: body.package || "طرد",
+        packet_weight: body.packet_weight || 0,
+        unit: body.unit || 1, // Default unit
+        price: body.price || 0,
+        ismain_item: body.ismain_item || 0,
+      },
+    });
+
+    return NextResponse.json(product);
+  } catch (error) {
+    console.error("Products API POST error:", error);
+    return NextResponse.json(
+      { error: "Error creating product" },
+      { status: 500 },
+    );
+  }
+}
