@@ -13,32 +13,34 @@ export async function GET(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
+    const productId = parseInt(id);
 
-    if (isNaN(shipmentId)) {
+    if (isNaN(productId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const shipment = await prisma.transit_shipments.findUnique({
-      where: { id: shipmentId },
+    const product = await prisma.comp_items.findUnique({
+      where: { id: productId },
       include: {
-        companies: true,
-        ports: true,
-        gates: true,
-        shipment_comp: true,
+        companies: {
+          select: { company_name: true },
+        },
+        units: {
+          select: { unit_name: true },
+        },
+        typeofitems: {
+          select: { item_type: true },
+        },
       },
     });
 
-    if (!shipment) {
-      return NextResponse.json(
-        { error: "Shipment not found" },
-        { status: 404 },
-      );
+    if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    return NextResponse.json(shipment);
+    return NextResponse.json(product);
   } catch (error) {
-    console.error("Shipment Detail API GET error:", error);
+    console.error("Product Detail API GET error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -57,46 +59,35 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
-    if (isNaN(shipmentId)) {
+    const productId = parseInt(id);
+    if (isNaN(productId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
     const body = await req.json();
 
-    // Update shipment logic
-    const updated = await prisma.transit_shipments.update({
-      where: { id: shipmentId },
+    const updated = await prisma.comp_items.update({
+      where: { id: productId },
       data: {
-        shipping_date: body.shipping_date
-          ? new Date(body.shipping_date)
-          : undefined,
-        arrival_date: body.arrival_date
-          ? new Date(body.arrival_date)
-          : undefined,
-        status: body.status,
-        shipping_company: body.shipping_company,
-        shipment_number: body.shipment_number,
-        container_number: body.container_number,
-        quantity: body.quantity,
-        weight: body.weight,
+        item_ar_name: body.item_ar_name,
+        item_en_name: body.item_en_name,
+        internal_code: body.internal_code,
         company_name: body.company_name,
-        goods_description: body.goods_description,
-        invoice_number: body.invoice_number,
-        invoice_date: body.invoice_date
-          ? new Date(body.invoice_date)
-          : undefined,
-        origin: body.origin,
-        port: body.port,
-        crossing_point: body.crossing_point,
+        item_code: body.item_code,
+        weight: body.weight,
+        package: body.package,
+        packet_weight: body.packet_weight,
+        unit: body.unit,
+        price: body.price,
+        ismain_item: body.ismain_item,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Shipment Detail API PATCH error:", error);
+    console.error("Product Detail API PATCH error:", error);
     return NextResponse.json(
-      { error: "Error updating shipment" },
+      { error: "Error updating product" },
       { status: 500 },
     );
   }
@@ -113,20 +104,20 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
-    if (isNaN(shipmentId)) {
+    const productId = parseInt(id);
+    if (isNaN(productId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    await prisma.transit_shipments.delete({
-      where: { id: shipmentId },
+    await prisma.comp_items.delete({
+      where: { id: productId },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Shipment Detail API DELETE error:", error);
+    console.error("Product Detail API DELETE error:", error);
     return NextResponse.json(
-      { error: "Error deleting shipment" },
+      { error: "Error deleting product" },
       { status: 500 },
     );
   }

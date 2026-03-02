@@ -148,6 +148,107 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  async createUser(data: any) {
+    return this.inviteUser(data);
+  }
+
+  async deleteUser(id: string) {
+    return this.request(`/api/user/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async updateUserRole(userId: string, role: string) {
+    return this.request(`/api/user/${userId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  // Generic Update/Delete for modularity
+  async updateCompany(id: number | string, data: any) {
+    return this.request(`/api/companies/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCompany(id: number | string) {
+    return this.request(`/api/companies/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async updateProduct(id: number | string, data: any) {
+    return this.request(`/api/products/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProduct(id: number | string) {
+    return this.request(`/api/products/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async updateTransport(id: number | string, data: any) {
+    return this.request(`/api/transport/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTransport(id: number | string) {
+    return this.request(`/api/transport/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async updateTrader(id: number | string, data: any) {
+    return this.request(`/api/traders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTrader(id: number | string) {
+    return this.request(`/api/traders/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Phase 3: Documents & AI Chat
+  async getDocuments() {
+    return this.request("/api/documents");
+  }
+
+  async uploadDocument(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetch("/api/documents", {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  async deleteDocument(id: string) {
+    return this.request(`/api/documents/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getChatHistory() {
+    return this.request("/api/chat");
+  }
+
+  async sendMessage(text: string) {
+    return this.request("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

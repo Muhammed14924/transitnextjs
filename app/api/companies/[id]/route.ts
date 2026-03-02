@@ -13,32 +13,31 @@ export async function GET(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
+    const companyId = parseInt(id);
 
-    if (isNaN(shipmentId)) {
+    if (isNaN(companyId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const shipment = await prisma.transit_shipments.findUnique({
-      where: { id: shipmentId },
+    const company = await prisma.companies.findUnique({
+      where: { id: companyId },
       include: {
-        companies: true,
-        ports: true,
-        gates: true,
-        shipment_comp: true,
+        _count: {
+          select: {
+            transit_shipments: true,
+            comp_items: true,
+          },
+        },
       },
     });
 
-    if (!shipment) {
-      return NextResponse.json(
-        { error: "Shipment not found" },
-        { status: 404 },
-      );
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    return NextResponse.json(shipment);
+    return NextResponse.json(company);
   } catch (error) {
-    console.error("Shipment Detail API GET error:", error);
+    console.error("Company Detail API GET error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -57,46 +56,31 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
-    if (isNaN(shipmentId)) {
+    const companyId = parseInt(id);
+    if (isNaN(companyId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
     const body = await req.json();
 
-    // Update shipment logic
-    const updated = await prisma.transit_shipments.update({
-      where: { id: shipmentId },
+    const updated = await prisma.companies.update({
+      where: { id: companyId },
       data: {
-        shipping_date: body.shipping_date
-          ? new Date(body.shipping_date)
-          : undefined,
-        arrival_date: body.arrival_date
-          ? new Date(body.arrival_date)
-          : undefined,
-        status: body.status,
-        shipping_company: body.shipping_company,
-        shipment_number: body.shipment_number,
-        container_number: body.container_number,
-        quantity: body.quantity,
-        weight: body.weight,
         company_name: body.company_name,
-        goods_description: body.goods_description,
-        invoice_number: body.invoice_number,
-        invoice_date: body.invoice_date
-          ? new Date(body.invoice_date)
-          : undefined,
-        origin: body.origin,
-        port: body.port,
-        crossing_point: body.crossing_point,
+        compen: body.compen,
+        place: body.place,
+        company_code: body.company_code,
+        Sequence1: body.Sequence1,
+        Sequence2: body.Sequence2,
+        first_internal_serial: body.first_internal_serial,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Shipment Detail API PATCH error:", error);
+    console.error("Company Detail API PATCH error:", error);
     return NextResponse.json(
-      { error: "Error updating shipment" },
+      { error: "Error updating company" },
       { status: 500 },
     );
   }
@@ -113,20 +97,20 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
-    if (isNaN(shipmentId)) {
+    const companyId = parseInt(id);
+    if (isNaN(companyId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    await prisma.transit_shipments.delete({
-      where: { id: shipmentId },
+    await prisma.companies.delete({
+      where: { id: companyId },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Shipment Detail API DELETE error:", error);
+    console.error("Company Detail API DELETE error:", error);
     return NextResponse.json(
-      { error: "Error deleting shipment" },
+      { error: "Error deleting company" },
       { status: 500 },
     );
   }

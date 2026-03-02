@@ -25,6 +25,7 @@ const navItems = [
   { name: "المنتجات", href: "/dashboard/products", icon: PackageSearch },
   { name: "بيانات النقل", href: "/dashboard/transport", icon: ShipWheel },
   { name: "التجار", href: "/dashboard/traders", icon: UserCheck },
+  { name: "المستندات", href: "/dashboard/documents", icon: PackageSearch },
   { name: "المستخدمين", href: "/dashboard/users", icon: Users },
   { name: "الإعدادات", href: "/dashboard/settings", icon: Settings },
 ];

@@ -56,6 +56,10 @@ model User {
   log           Int?
   last_activity DateTime? @default(now()) @db.Timestamp(6)
 
+  // --- Relations ---
+  documents     Document[]
+  messages      ChatMessage[]
+
   @@map("users")
 }
 
@@ -279,4 +283,34 @@ model units {
   id         Int          @id
   unit_name  String       @default("طرد") @db.VarChar(50)
   comp_items comp_items[]
+}
+
+// ==========================================
+// 4. Documents & AI Chat (Phase 3)
+// ==========================================
+model Document {
+  id        String   @id @default(cuid())
+  fileName  String
+  fileUrl   String
+  fileType  String?
+  fileSize  Int?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  status    String   @default("pending") // pending, processed, error
+  metadata  Json?    // For vector IDs or other info
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("documents")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  text      String   @db.Text
+  isUser    Boolean  @default(true)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@map("chat_messages")
 }

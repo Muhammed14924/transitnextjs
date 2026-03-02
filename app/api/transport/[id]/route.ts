@@ -13,32 +13,31 @@ export async function GET(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
+    const transportId = parseInt(id);
 
-    if (isNaN(shipmentId)) {
+    if (isNaN(transportId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const shipment = await prisma.transit_shipments.findUnique({
-      where: { id: shipmentId },
+    const vh = await prisma.transport.findUnique({
+      where: { id: transportId },
       include: {
-        companies: true,
-        ports: true,
-        gates: true,
-        shipment_comp: true,
+        gates: {
+          select: { gate_name: true },
+        },
       },
     });
 
-    if (!shipment) {
+    if (!vh) {
       return NextResponse.json(
-        { error: "Shipment not found" },
+        { error: "Transport record not found" },
         { status: 404 },
       );
     }
 
-    return NextResponse.json(shipment);
+    return NextResponse.json(vh);
   } catch (error) {
-    console.error("Shipment Detail API GET error:", error);
+    console.error("Transport Detail API GET error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -57,46 +56,39 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
-    if (isNaN(shipmentId)) {
+    const transportId = parseInt(id);
+    if (isNaN(transportId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
     const body = await req.json();
 
-    // Update shipment logic
-    const updated = await prisma.transit_shipments.update({
-      where: { id: shipmentId },
+    const updated = await prisma.transport.update({
+      where: { id: transportId },
       data: {
-        shipping_date: body.shipping_date
-          ? new Date(body.shipping_date)
+        driver: body.driver,
+        driver_num: body.driver_num,
+        plate_front: body.plate_front,
+        plate_back: body.plate_back,
+        sort_num: body.sort_num,
+        notes: body.notes,
+        transport_company: body.transport_company,
+        gate: body.gate,
+        car_id: body.car_id,
+        download_date: body.download_date
+          ? new Date(body.download_date)
           : undefined,
-        arrival_date: body.arrival_date
-          ? new Date(body.arrival_date)
+        discharge_date: body.discharge_date
+          ? new Date(body.discharge_date)
           : undefined,
-        status: body.status,
-        shipping_company: body.shipping_company,
-        shipment_number: body.shipment_number,
-        container_number: body.container_number,
-        quantity: body.quantity,
-        weight: body.weight,
-        company_name: body.company_name,
-        goods_description: body.goods_description,
-        invoice_number: body.invoice_number,
-        invoice_date: body.invoice_date
-          ? new Date(body.invoice_date)
-          : undefined,
-        origin: body.origin,
-        port: body.port,
-        crossing_point: body.crossing_point,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Shipment Detail API PATCH error:", error);
+    console.error("Transport Detail API PATCH error:", error);
     return NextResponse.json(
-      { error: "Error updating shipment" },
+      { error: "Error updating transport" },
       { status: 500 },
     );
   }
@@ -113,20 +105,20 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const shipmentId = parseInt(id);
-    if (isNaN(shipmentId)) {
+    const transportId = parseInt(id);
+    if (isNaN(transportId)) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    await prisma.transit_shipments.delete({
-      where: { id: shipmentId },
+    await prisma.transport.delete({
+      where: { id: transportId },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Shipment Detail API DELETE error:", error);
+    console.error("Transport Detail API DELETE error:", error);
     return NextResponse.json(
-      { error: "Error deleting shipment" },
+      { error: "Error deleting transport" },
       { status: 500 },
     );
   }
