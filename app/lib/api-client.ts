@@ -1,5 +1,5 @@
 // app/lib/api-client.ts
-
+//const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 class ApiClient {
   async request(endpoint: string, options: RequestInit = {}) {
     const config: RequestInit = {
@@ -248,6 +248,102 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ text }),
     });
+  }
+
+  // Phase 4: Master Data
+  async getDepots() {
+    return this.request("/api/depots");
+  }
+  async createDepot(data: any) {
+    return this.request("/api/depots", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updateDepot(id: string | number, data: any) {
+    return this.request(`/api/depots/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async deleteDepot(id: string | number) {
+    return this.request(`/api/depots/${id}`, { method: "DELETE" });
+  }
+
+  async getGates() {
+    return this.request("/api/gates");
+  }
+  async createGate(data: any) {
+    return this.request("/api/gates", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updateGate(id: string | number, data: any) {
+    return this.request(`/api/gates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async deleteGate(id: string | number) {
+    return this.request(`/api/gates/${id}`, { method: "DELETE" });
+  }
+
+  async getPorts() {
+    return this.request("/api/ports");
+  }
+  async createPort(data: any) {
+    return this.request("/api/ports", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updatePort(id: string | number, data: any) {
+    return this.request(`/api/ports/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async deletePort(id: string | number) {
+    return this.request(`/api/ports/${id}`, { method: "DELETE" });
+  }
+
+  async getTypeofitems() {
+    return this.request("/api/typeofitems");
+  }
+  async createTypeofitem(data: any) {
+    return this.request("/api/typeofitems", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updateTypeofitem(id: string | number, data: any) {
+    return this.request(`/api/typeofitems/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async deleteTypeofitem(id: string | number) {
+    return this.request(`/api/typeofitems/${id}`, { method: "DELETE" });
+  }
+
+  async getCompItems() {
+    return this.request("/api/comp_items");
+  }
+  async createCompItem(data: any) {
+    return this.request("/api/comp_items", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updateCompItem(id: string | number, data: any) {
+    return this.request(`/api/comp_items/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async deleteCompItem(id: string | number) {
+    return this.request(`/api/comp_items/${id}`, { method: "DELETE" });
   }
 }
 
