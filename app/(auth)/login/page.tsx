@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Truck } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -13,7 +11,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +28,7 @@ export default function LoginPage() {
       } else {
         window.location.href = "/dashboard"; // Force reload to fetch user data in provider
       }
-    } catch (err) {
+    } catch {
       setError("حدث خطأ أثناء الاتصال بالخادم");
     } finally {
       setLoading(false);
@@ -110,14 +107,10 @@ export default function LoginPage() {
               {loading ? "جاري تسجيل الدخول..." : "تسجيل الدخول"}
             </Button>
 
-            <div className="text-center mt-6">
-              <span className="text-slate-500 text-sm">ليس لديك حساب؟ </span>
-              <Link
-                href="/register"
-                className="text-primary hover:underline text-sm font-semibold transition-colors"
-              >
-                إنشاء حساب جديد
-              </Link>
+            <div className="text-center mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-slate-400 text-xs leading-relaxed">
+                ليس لديك حساب؟ تواصل مع مسؤول النظام لإنشاء حسابك.
+              </p>
             </div>
           </form>
         </div>

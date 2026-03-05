@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/app/providers/AuthProvider";
 import {
   Plus,
   Search,
@@ -63,6 +64,8 @@ interface Company {
 }
 
 export default function CompaniesPage() {
+  const { user } = useAuth();
+  const canWrite = user?.role === "ADMIN" || user?.role === "MANAGER";
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -168,10 +171,12 @@ export default function CompaniesPage() {
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
+            {canWrite ? (
             <Button className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20">
               <Plus size={16} />
               إضافة شركة جديدة
             </Button>
+            ) : <span />}
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] rounded-2xl">
             <DialogHeader>
@@ -373,6 +378,7 @@ export default function CompaniesPage() {
                     </TableCell>
                     <TableCell className="px-6">
                       <div className="flex items-center justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-200">
+                        {canWrite && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -381,6 +387,8 @@ export default function CompaniesPage() {
                         >
                           <Edit size={16} />
                         </Button>
+                        )}
+                        {canWrite && (
                         <DropdownMenu dir="rtl">
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -407,6 +415,7 @@ export default function CompaniesPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

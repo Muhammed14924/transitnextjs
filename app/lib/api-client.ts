@@ -142,15 +142,11 @@ class ApiClient {
     return this.request(url);
   }
 
-  async inviteUser(data: any) {
-    return this.request("/api/auth/register", {
+  async createUser(data: any) {
+    return this.request("/api/user", {
       method: "POST",
       body: JSON.stringify(data),
     });
-  }
-
-  async createUser(data: any) {
-    return this.inviteUser(data);
   }
 
   async deleteUser(id: string) {

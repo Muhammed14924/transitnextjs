@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/providers/AuthProvider";
 import {
   Plus,
   Search,
@@ -52,6 +54,8 @@ import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
 export default function UsersPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -118,6 +122,30 @@ export default function UsersPage() {
     setSelectedUser(user);
     setIsDeleteDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!authLoading && user && user.role !== "ADMIN") {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400 font-bold">
+        جارٍ التحقق من الصلاحيات...
+      </div>
+    );
+  }
+
+  if (!user || user.role !== "ADMIN") {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <ShieldAlert className="text-rose-400" size={48} />
+        <p className="text-xl font-black text-slate-700">وصول مرفوض</p>
+        <p className="text-slate-400 font-medium">هذه الصفحة متاحة لمديري النظام فقط.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12">

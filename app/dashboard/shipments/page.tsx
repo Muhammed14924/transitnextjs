@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/app/providers/AuthProvider";
 import {
   Plus,
   Search,
@@ -67,6 +68,8 @@ interface Shipment {
 }
 
 export default function ShipmentsPage() {
+  const { user } = useAuth();
+  const canWrite = user?.role === "ADMIN" || user?.role === "MANAGER";
   const [shipmentsData, setShipmentsData] = useState<Shipment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -223,6 +226,7 @@ export default function ShipmentsPage() {
             <Download size={16} />
             تصدير PDF
           </Button>
+          {canWrite && (
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all px-6">
@@ -421,6 +425,7 @@ export default function ShipmentsPage() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -577,6 +582,7 @@ export default function ShipmentsPage() {
                         >
                           <Eye size={18} />
                         </Button>
+                        {canWrite && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -585,6 +591,8 @@ export default function ShipmentsPage() {
                         >
                           <Edit size={18} />
                         </Button>
+                        )}
+                        {canWrite && (
                         <DropdownMenu dir="rtl">
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -607,6 +615,7 @@ export default function ShipmentsPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
+import { requireRole, CAN_WRITE_ROLES } from "@/app/lib/auth-server";
 
 export async function GET(req: Request) {
   try {
@@ -74,10 +75,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || user.role === "GUEST") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { user, error } = await requireRole(...CAN_WRITE_ROLES);
+    if (error) return error;
 
     const body = await req.json();
 
