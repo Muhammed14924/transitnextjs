@@ -132,11 +132,26 @@ model companies {
   transit_shipments     transit_shipments[]
 }
 
+// model depots {
+//   id          Int    @id
+//   depot_name  String @db.VarChar(50)
+//   depot_place String @db.VarChar(50)
+//   depot_code  String @db.VarChar(3)
+// }
 model depots {
-  id          Int    @id
-  depot_name  String @db.VarChar(50)
-  depot_place String @db.VarChar(50)
-  depot_code  String @db.VarChar(3)
+  id             Int       @id @default(autoincrement())
+  depot_code     String    @unique @db.VarChar(3) // الكود الفريد (مثل 001) سنولده برمجياً
+  depot_name     String    @db.VarChar(50)        // اسم المستودع
+  
+  // -- الحقول اللوجستية المقترحة --
+  location       String?   @db.VarChar(100)       // موقع أو عنوان المستودع
+  manager_name   String?   @db.VarChar(50)        // اسم أمين المستودع
+  contact_number String?   @db.VarChar(20)        // رقم تواصل المستودع
+  
+  // -- حقول الحالة والتدقيق --
+  isActive       Boolean   @default(true) 
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model destination {
