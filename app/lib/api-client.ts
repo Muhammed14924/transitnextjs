@@ -341,6 +341,46 @@ class ApiClient {
   async deleteCompItem(id: string | number) {
     return this.request(`/api/comp_items/${id}`, { method: "DELETE" });
   }
+
+  // --- Transport Companies ---
+  getTransportCompanies() {
+    return this.request("/api/transport-companies");
+  }
+  createTransportCompany(data: any) {
+    return this.request("/api/transport-companies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateTransportCompany(id: number, data: any) {
+    return this.request(`/api/transport-companies/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteTransportCompany(id: number) {
+    return this.request(`/api/transport-companies/${id}`, { method: "DELETE" });
+  }
+
+  // --- Destinations ---
+  getDestinations() {
+    return this.request("/api/destinations");
+  }
+  createDestination(data: any) {
+    return this.request("/api/destinations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateDestination(id: number, data: any) {
+    return this.request(`/api/destinations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteDestination(id: number) {
+    return this.request(`/api/destinations/${id}`, { method: "DELETE" });
+  }
 }
 
 export const apiClient = new ApiClient();

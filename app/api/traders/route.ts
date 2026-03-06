@@ -12,12 +12,15 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q") || undefined;
 
-    const traders = await prisma.traders.findMany({
+    const items = await prisma.traders.findMany({
       where: q
         ? {
             OR: [
-              { trader: { contains: q, mode: "insensitive" } },
+              { trader_name: { contains: q, mode: "insensitive" } },
               { trader_code: { contains: q, mode: "insensitive" } },
+              { phone: { contains: q, mode: "insensitive" } },
+              { email: { contains: q, mode: "insensitive" } },
+              { contact_person: { contains: q, mode: "insensitive" } },
             ],
           }
         : undefined,
@@ -26,10 +29,9 @@ export async function GET(req: Request) {
           select: { trans_2: true },
         },
       },
-      orderBy: { trader: "asc" },
+      orderBy: { createdAt: "desc" },
     });
-
-    return NextResponse.json(traders);
+    return NextResponse.json(items);
   } catch (error) {
     console.error("Traders API error:", error);
     return NextResponse.json(
@@ -47,26 +49,56 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const {
+      trader_name,
+      contact_person,
+      phone,
+      email,
+      address,
+      tax_number,
+      opening_balance,
+      credit_limit,
+      isActive,
+    } = body;
 
-    // Generate ID since it's not autoincremented in schema
-    const maxIdResult = await prisma.traders.aggregate({
-      _max: { id: true },
+    // --- المنطق البرمجي لتوليد كود التاجر التسلسلي ---
+    // 1. نجلب آخر تاجر تم إضافته لترتيب ID تنازلياً
+    const lastTrader = await prisma.traders.findFirst({
+      orderBy: { id: "desc" },
     });
-    const nextId = (maxIdResult._max.id || 0) + 1;
 
-    const trader = await prisma.traders.create({
+    // 2. تحديد الرقم التالي (إذا كان موجوداً نضيف 1، وإلا نبدأ من 1)
+    let nextNumber = 1;
+    if (lastTrader && lastTrader.trader_code) {
+      // نستخرج الرقم من النص في حال كان هناك أحرف مستقبلاً، أو نحوله مباشرة
+      const numberPart = lastTrader.trader_code.replace(/\D/g, "");
+      nextNumber = numberPart ? parseInt(numberPart) + 1 : 1;
+    }
+
+    // 3. تحويل الرقم إلى نص مكون من 4 خانات
+    const newCode = String(nextNumber).padStart(3, "0");
+
+    // إنشاء التاجر بالحقول الجديدة والكود المولد
+    const newItem = await prisma.traders.create({
       data: {
-        id: nextId,
-        trader: body.trader,
-        trader_code: body.trader_code || "000",
+        trader_code: newCode,
+        trader_name,
+        contact_person: contact_person || null,
+        phone: phone || null,
+        email: email || null,
+        address: address || null,
+        tax_number: tax_number || null,
+        opening_balance: opening_balance ? parseFloat(opening_balance) : 0,
+        credit_limit: credit_limit ? parseFloat(credit_limit) : null,
+        isActive: isActive !== undefined ? isActive : true,
       },
     });
 
-    return NextResponse.json(trader);
+    return NextResponse.json(newItem, { status: 201 });
   } catch (error) {
-    console.error("Traders API POST error:", error);
+    console.error("Error creating trader:", error);
     return NextResponse.json(
-      { error: "Error creating trader record" },
+      { error: "Error creating trader" },
       { status: 500 },
     );
   }

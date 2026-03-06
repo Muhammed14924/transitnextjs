@@ -59,12 +59,39 @@ export async function PATCH(
     }
 
     const body = await req.json();
+    const {
+      trader_name,
+      contact_person,
+      phone,
+      email,
+      address,
+      tax_number,
+      opening_balance,
+      credit_limit,
+      isActive,
+    } = body;
 
     const updated = await prisma.traders.update({
       where: { id: traderId },
       data: {
-        trader: body.trader,
-        trader_code: body.trader_code,
+        trader_name: trader_name !== undefined ? trader_name : undefined,
+        contact_person:
+          contact_person !== undefined ? contact_person : undefined,
+        phone: phone !== undefined ? phone : undefined,
+        email: email !== undefined ? email : undefined,
+        address: address !== undefined ? address : undefined,
+        tax_number: tax_number !== undefined ? tax_number : undefined,
+        opening_balance:
+          opening_balance !== undefined
+            ? parseFloat(opening_balance)
+            : undefined,
+        credit_limit:
+          credit_limit !== undefined
+            ? credit_limit
+              ? parseFloat(credit_limit)
+              : null
+            : undefined,
+        isActive: isActive !== undefined ? isActive : undefined,
       },
     });
 

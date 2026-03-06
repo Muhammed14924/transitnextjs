@@ -154,18 +154,83 @@ model depots {
   updatedAt      DateTime  @updatedAt
 }
 
+// model destination {
+//   id                                       Int       @id
+//   destination                              String?   @db.VarChar(50)
+//   trans_2_trans_2_destinationTodestination trans_2[] @relation("trans_2_destinationTodestination")
+// }
 model destination {
-  id                                       Int       @id
-  destination                              String?   @db.VarChar(50)
+  id               Int       @id @default(autoincrement())
+  destination_name String    @db.VarChar(100) // اسم الوجهة (مطلوب)
+  
+  // -- الحقول اللوجستية المقترحة --
+  destination_type String?   @db.VarChar(50)  // نوع الوجهة (مثال: مدينة، مستودع، تاجر، أخرى)
+  
+  // -- حقول الحالة والتدقيق --
+  isActive         Boolean   @default(true)   // حالة الوجهة (متاحة/متوقفة)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // -- العلاقات --
+  // أبقيت على العلاقة القديمة كما هي لتجنب كسر أي كود مرتبط بجدول trans_2
   trans_2_trans_2_destinationTodestination trans_2[] @relation("trans_2_destinationTodestination")
 }
 
+// model gates {
+//   id                Int                 @id
+//   gate_name         String              @db.VarChar(100)
+//   transit_shipments transit_shipments[]
+//   transport         transport[]
+// }
+// model ports {
+//   id                Int                 @id(map: "ports_pk")
+//   port_name         String              @db.VarChar(50)
+//   transit_shipments transit_shipments[]
+// }
 model gates {
-  id                Int                 @id
-  gate_name         String              @db.VarChar(100)
-  transit_shipments transit_shipments[]
-  transport         transport[]
+  id                 Int       @id @default(autoincrement())
+  gate_code          String?   @unique @db.VarChar(50) // كود المعبر (اختياري)
+  gate_name          String    @db.VarChar(100)
+  
+  // -- الحقول اللوجستية المقترحة --
+  location           String?   @db.VarChar(100) // موقع المعبر (المدينة/المنطقة)
+  connecting_country String?   @db.VarChar(100) // الدولة التي يربط معها المعبر (مثل: سوريا، العراق)
+  
+  // -- حقول الحالة والتدقيق --
+  isActive           Boolean   @default(true)   // حالة المعبر (مفتوح/مغلق)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  // -- العلاقات --
+  transit_shipments  transit_shipments[]
+  transport          transport[]
 }
+
+model ports {
+  // لاحظ: أبقيت على @map("ports_pk") إذا كانت قاعدة بياناتك القديمة تعتمد على هذا الاسم
+  id                 Int       @id(map: "ports_pk") @default(autoincrement())
+  port_code          String?   @unique @db.VarChar(50) // كود الميناء العالمي (مثل TRMER)
+  port_name          String    @db.VarChar(100)
+  
+  // -- الحقول اللوجستية المقترحة --
+  city               String?   @db.VarChar(100) // المدينة التي يقع فيها الميناء
+  country            String?   @db.VarChar(100) // الدولة
+  
+  // -- حقول الحالة والتدقيق --
+  isActive           Boolean   @default(true)   // حالة الميناء (يعمل/متوقف)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  // -- العلاقات --
+  transit_shipments  transit_shipments[]
+}
+
+
+
+
+
+
+
 
 model material_codes {
   id              Int        @id
@@ -182,11 +247,7 @@ model material_codes {
   @@index([comp_item], map: "comp_item")
 }
 
-model ports {
-  id                Int                 @id(map: "ports_pk")
-  port_name         String              @db.VarChar(50)
-  transit_shipments transit_shipments[]
-}
+
 
 model shipment_comp {
   id                Int                 @id(map: "shipment_comp_pk")
@@ -204,10 +265,36 @@ model tariff_schedule {
   comp_items   comp_items[]
 }
 
+// model traders {
+//   id          Int       @id
+//   trader      String?   @db.VarChar(50)
+//   trader_code String    @db.VarChar(3)
+//   trans_2     trans_2[]
+// }
 model traders {
-  id          Int       @id
-  trader      String?   @db.VarChar(50)
-  trader_code String    @db.VarChar(3)
+  id              Int       @id @default(autoincrement())
+  trader_code     String    @unique @db.VarChar(20) // كود يولد تلقائياً (مثل: 0001 أو TRD-0001)
+  trader_name     String    @db.VarChar(100)        // اسم التاجر أو الشركة
+  
+  // -- الحقول اللوجستية والمالية المقترحة --
+  contact_person  String?   @db.VarChar(100)        // اسم جهة الاتصال / المندوب
+  phone           String?   @db.VarChar(20)         // رقم الهاتف
+  email           String?   @db.VarChar(100)        // البريد الإلكتروني (لإرسال كشوفات الحساب)
+  address         String?   @db.VarChar(255)        // عنوان التاجر
+  tax_number      String?   @db.VarChar(50)         // الرقم الضريبي
+  
+  // -- حقول الحسابات (مستقبلاً) --
+  opening_balance Decimal   @default(0) @db.Decimal(10, 2) // الرصيد الافتتاحي (بالموجب له، بالسالب عليه)
+  credit_limit    Decimal?  @db.Decimal(10, 2)             // سقف الدين المسموح به
+  
+  // -- حقول النظام --
+  isActive        Boolean   @default(true) // هل التاجر نشط؟
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // العلاقات المستقبلية ستكون هنا (فواتير، شحنات، دفعات)
+  // shipments    shipments[]
+  // invoices     invoices[]
   trans_2     trans_2[]
 }
 
@@ -281,9 +368,28 @@ model transport {
   @@index([gate], map: "gate")
 }
 
+// model transport_company {
+//   id                                                       Int         @id
+//   trans_name                                               String      @db.VarChar(50)
+//   transport_transport_transport_companyTotransport_company transport[] @relation("transport_transport_companyTotransport_company")
+// }
 model transport_company {
-  id                                                       Int         @id
-  trans_name                                               String      @db.VarChar(50)
+  id               Int       @id @default(autoincrement())
+  trans_name       String    @db.VarChar(100) // اسم شركة النقل
+  
+  // -- الحقول اللوجستية والمالية --
+  contact_person   String?   @db.VarChar(100) // اسم المندوب أو مسؤول الحركة
+  phone            String?   @db.VarChar(20)  // رقم هاتف المندوب
+  email            String?   @db.VarChar(100) // البريد الإلكتروني (لإرسال كشوفات الحساب)
+  transport_type   String?   @db.VarChar(50)  // نطاق العمل (داخلي، دولي، ترانزيت)
+  opening_balance  Decimal   @default(0) @db.Decimal(10, 2) // الرصيد الافتتاحي للشركة
+  
+  // -- حقول الحالة والتدقيق --
+  isActive         Boolean   @default(true)   // هل نتعامل مع هذه الشركة حالياً؟
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // -- العلاقات القديمة (مهم إبقاؤها لعدم كسر الجداول الأخرى) --
   transport_transport_transport_companyTotransport_company transport[] @relation("transport_transport_companyTotransport_company")
 }
 

@@ -21,12 +21,33 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
+
+    // نستخرج الحقول ونتجاهل id الخاص بـ body لتجنب مشاكل تحديث المفتاح الأساسي
+    const {
+      id: _,
+      gate_name,
+      gate_code,
+      location,
+      connecting_country,
+      isActive,
+    } = body;
+
+    const data: any = {};
+    if (gate_name !== undefined) data.gate_name = gate_name;
+    // تحويل النص الفارغ إلى null لتجنب مشاكل Unique Constraint
+    if (gate_code !== undefined) data.gate_code = gate_code || null;
+    if (location !== undefined) data.location = location || null;
+    if (connecting_country !== undefined)
+      data.connecting_country = connecting_country || null;
+    if (isActive !== undefined) data.isActive = isActive;
+
     const item = await prisma.gates.update({
       where: { id: parseInt(id) },
-      data: body,
+      data,
     });
     return NextResponse.json(item);
   } catch (error) {
+    console.error("Error updating gate:", error);
     return NextResponse.json({ error: "Error updating" }, { status: 500 });
   }
 }

@@ -1,23 +1,19 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus,
-  Search,
   Users,
-  CreditCard,
-  ShoppingBag,
-  MoreVertical,
-  History,
-  TrendingUp,
-  MapPin,
-  Mail,
+  Search,
   Phone,
+  Mail,
+  MapPin,
+  Building,
   Edit,
   Trash2,
-  AlertTriangle,
+  Wallet,
 } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { Card, CardContent } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -29,8 +25,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -39,532 +33,613 @@ import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/app/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
-import { cn } from "@/app/lib/utils";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { cn } from "@/app/lib/utils";
 
-interface Trader {
-  id: number;
-  trader: string;
-  trader_code: string;
-  _count?: {
-    trans_2: number;
-  };
-}
-
-export default function TradersPage() {
-  const [traders, setTraders] = useState<Trader[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
-
-  const [formData, setFormData] = useState({
-    trader: "",
-    trader_code: "",
-  });
-
-  const fetchTraders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await apiClient.getTraders(searchTerm);
-      if (data) {
-        setTraders(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch traders", error);
-      toast.error("فشل في تحميل بيانات التجار");
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm]);
-
-  useEffect(() => {
-    fetchTraders();
-  }, [fetchTraders]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiClient.createTrader(formData);
-      setIsAddDialogOpen(false);
-      setFormData({ trader: "", trader_code: "" });
-      fetchTraders();
-      toast.success("تمت إضافة التاجر بنجاح");
-    } catch (error) {
-      console.error("Error creating trader", error);
-      toast.error("حدث خطأ أثناء الإضافة");
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTrader) return;
-    try {
-      await apiClient.updateTrader(selectedTrader.id, formData);
-      setIsEditDialogOpen(false);
-      setSelectedTrader(null);
-      setFormData({ trader: "", trader_code: "" });
-      fetchTraders();
-      toast.success("تم تحديث بيانات التاجر");
-    } catch (error) {
-      console.error("Error updating trader", error);
-      toast.error("حدث خطأ أثناء التحديث");
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedTrader) return;
-    try {
-      await apiClient.deleteTrader(selectedTrader.id);
-      setIsDeleteDialogOpen(false);
-      setSelectedTrader(null);
-      fetchTraders();
-      toast.success("تم حذف التاجر بنجاح");
-    } catch (error) {
-      console.error("Error deleting trader", error);
-      toast.error("حدث خطأ أثناء الحذف");
-    }
-  };
-
-  const openEditDialog = (trader: Trader) => {
-    setSelectedTrader(trader);
-    setFormData({
-      trader: trader.trader,
-      trader_code: trader.trader_code || "",
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const openDeleteDialog = (trader: Trader) => {
-    setSelectedTrader(trader);
-    setIsDeleteDialogOpen(true);
-  };
-
-  return (
-    <div className="space-y-6 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            إدارة التجار والموردين
-          </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            متابعة سجلات التجار، الصفقات المنفذة، والعلاقات التجارية.
-          </p>
-        </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20">
-              <Plus size={16} />
-              إضافة تاجر جديد
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-right text-slate-900">
-                إضافة تاجر جديد
-              </DialogTitle>
-              <DialogDescription className="text-right text-slate-500">
-                أدخل تفاصيل التاجر الجديد ليتم تسجيله في النظام.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreate}>
-              <div className="grid gap-4 py-6 rtl text-right">
-                <div className="space-y-1.5">
-                  <Label htmlFor="trader" className="font-bold text-slate-700">
-                    اسم التاجر
-                  </Label>
-                  <Input
-                    id="trader"
-                    value={formData.trader}
-                    onChange={(e) =>
-                      setFormData({ ...formData, trader: e.target.value })
-                    }
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="trader_code"
-                    className="font-bold text-slate-700"
-                  >
-                    كود التاجر
-                  </Label>
-                  <Input
-                    id="trader_code"
-                    value={formData.trader_code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, trader_code: e.target.value })
-                    }
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200"
-                    placeholder="مثال: ABC"
-                    maxLength={10}
-                    required
-                  />
-                </div>
-              </div>
-              <DialogFooter className="flex-row-reverse sm:justify-start gap-2 pt-2">
-                <Button
-                  type="submit"
-                  className="rounded-xl px-10 h-11 bg-primary hover:bg-primary/90 font-bold"
-                >
-                  حفظ
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => setIsAddDialogOpen(false)}
-                  className="rounded-xl h-11 px-6"
-                >
-                  إلغاء
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <TraderSummaryCard
-          title="إجمالي التجار"
-          value={loading ? "..." : traders.length.toString()}
-          icon={<Users className="text-blue-600" size={18} />}
-          trend="نشط"
-          border="border-blue-100"
-        />
-        <TraderSummaryCard
-          title="إجمالي المعاملات"
-          value={
-            loading
-              ? "..."
-              : traders
-                  .reduce((acc, t) => acc + (t._count?.trans_2 || 0), 0)
-                  .toString()
-          }
-          icon={<ShoppingBag className="text-emerald-600" size={18} />}
-          trend="تراكمي"
-          border="border-emerald-100"
-        />
-        <TraderSummaryCard
-          title="أحدث تاجر"
-          value={loading ? "..." : traders[0]?.trader || "لا يوجد"}
-          icon={<CreditCard className="text-amber-600" size={18} />}
-          trend="جديد"
-          border="border-amber-100"
-        />
-      </div>
-
-      <Card className="border-slate-100 shadow-sm rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
-        <CardHeader className="bg-white border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 py-8 px-6">
-          <div className="relative w-full md:w-96">
-            <Search
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-              size={16}
-            />
-            <Input
-              placeholder="بحث باسم التاجر أو الكود..."
-              className="pr-10 bg-slate-50 border-slate-200 focus-visible:ring-primary/20 rounded-xl h-11 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => fetchTraders()}
-              className="h-11 rounded-xl gap-2 border-slate-200 text-slate-600 hover:bg-slate-50 px-6 font-medium"
-            >
-              تحديث البيانات
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="border-slate-100 h-14">
-                <TableHead className="text-right font-black text-slate-700 text-xs px-6 uppercase tracking-widest">
-                  المعرف
-                </TableHead>
-                <TableHead className="text-center font-black text-slate-700 text-xs px-4 uppercase tracking-widest">
-                  الاسم
-                </TableHead>
-                <TableHead className="text-right font-black text-slate-700 text-xs px-4 uppercase tracking-widest">
-                  معلومات التواصل
-                </TableHead>
-                <TableHead className="text-right font-black text-slate-700 text-xs px-4 uppercase tracking-widest">
-                  الحالة
-                </TableHead>
-                <TableHead className="text-center font-black text-slate-700 text-xs px-4 uppercase tracking-widest">
-                  إجمالي المعاملات
-                </TableHead>
-                <TableHead className="text-center font-black text-slate-700 text-xs px-6 uppercase tracking-widest px-10">
-                  الإجراءات
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {traders.length > 0 ? (
-                traders.map((trader) => (
-                  <TableRow
-                    key={trader.id}
-                    className="hover:bg-slate-50/30 transition-colors border-slate-50 h-[80px] group"
-                  >
-                    <TableCell className="px-6">
-                      <span className="font-bold text-slate-400 text-xs tracking-wider">
-                        #{trader.trader_code || trader.id}
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="flex items-center gap-3 justify-center">
-                        <Avatar className="h-10 w-10 border border-slate-100 bg-white rounded-2xl shadow-sm">
-                          <AvatarFallback className="text-xs text-primary font-black uppercase">
-                            {trader.trader?.substring(0, 2) || "TR"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-bold text-slate-900 text-sm">
-                          {trader.trader}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-600 font-bold">
-                          <Phone size={12} className="text-slate-300" />
-                          <span dir="ltr">N/A</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-bold">
-                          <Mail size={12} className="text-slate-300" />
-                          <span className="truncate max-w-[120px]">N/A</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <Badge
-                        className={cn(
-                          "rounded-full font-black px-3 py-0.5 h-6 border-none shadow-sm bg-emerald-50 text-emerald-600",
-                        )}
-                      >
-                        نشط
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center px-4">
-                      <div className="inline-flex items-center gap-1.5 text-slate-900 font-black tabular-nums bg-slate-100 px-3 py-1 rounded-full text-xs">
-                        <TrendingUp size={14} className="text-emerald-500" />
-                        {trader._count?.trans_2 || 0} عملية
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 px-10">
-                      <div className="flex items-center justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEditDialog(trader)}
-                          className="h-9 w-9 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <DropdownMenu dir="rtl">
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-slate-400 hover:bg-slate-100 rounded-xl"
-                            >
-                              <MoreVertical size={16} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="w-48 rounded-2xl p-2 border-slate-100 shadow-xl"
-                          >
-                            <DropdownMenuItem className="p-3 text-sm focus:bg-slate-50 rounded-xl gap-3 cursor-pointer">
-                              <History size={16} className="text-slate-400" />{" "}
-                              سجل الطلبات
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openDeleteDialog(trader)}
-                              className="p-3 text-sm focus:bg-rose-50 text-rose-600 rounded-xl gap-3 cursor-pointer"
-                            >
-                              <Trash2 size={16} /> حذف التاجر
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-24 text-slate-400"
-                  >
-                    <div className="flex flex-col items-center gap-3">
-                      <MapPin size={40} className="text-slate-100" />
-                      <p className="font-bold text-sm">
-                        {loading
-                          ? "جاري جلب قائمة التجار..."
-                          : "لا يوجد تجار مسجلين حالياً"}
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-right text-slate-900">
-              تعديل بيانات التاجر
-            </DialogTitle>
-            <DialogDescription className="text-right text-slate-500">
-              قم بتعديل بيانات التاجر واضغط على حفظ.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleUpdate}>
-            <div className="grid gap-4 py-6 rtl text-right">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="edit_trader"
-                  className="font-bold text-slate-700"
-                >
-                  اسم التاجر
-                </Label>
-                <Input
-                  id="edit_trader"
-                  value={formData.trader}
-                  onChange={(e) =>
-                    setFormData({ ...formData, trader: e.target.value })
-                  }
-                  className="h-11 rounded-xl bg-slate-50 border-slate-200"
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="edit_trader_code"
-                  className="font-bold text-slate-700"
-                >
-                  كود التاجر
-                </Label>
-                <Input
-                  id="edit_trader_code"
-                  value={formData.trader_code}
-                  onChange={(e) =>
-                    setFormData({ ...formData, trader_code: e.target.value })
-                  }
-                  className="h-11 rounded-xl bg-slate-50 border-slate-200"
-                  placeholder="مثال: ABC"
-                  maxLength={10}
-                  required
-                />
-              </div>
-            </div>
-            <DialogFooter className="flex-row-reverse sm:justify-start gap-2 pt-2">
-              <Button
-                type="submit"
-                className="rounded-xl px-10 h-11 bg-primary hover:bg-primary/90 font-bold font-bold"
-              >
-                حفظ التغييرات
-              </Button>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setIsEditDialogOpen(false)}
-                className="rounded-xl h-11 px-6"
-              >
-                إلغاء
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-3xl">
-          <DialogHeader>
-            <div className="h-16 w-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-100">
-              <AlertTriangle className="text-rose-600" size={32} />
-            </div>
-            <DialogTitle className="text-center font-black text-slate-900 text-xl tracking-tight">
-              تأكيد حذف التاجر
-            </DialogTitle>
-            <DialogDescription className="text-center text-slate-500 font-medium leading-relaxed py-4">
-              هل أنت متأكد من رغبتك في حذف التاجر{" "}
-              <span className="font-black text-slate-900">
-                "{selectedTrader?.trader}"
-              </span>
-              ؟
-              <br />
-              سيتم حذف كافة البيانات المتعلقة به في النظام.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-3 mt-4">
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              className="rounded-2xl h-14 w-full sm:flex-1 bg-rose-600 hover:bg-rose-700 font-black shadow-lg shadow-rose-100"
-            >
-              نعم، تأكيد الحذف
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteDialogOpen(false)}
-              className="rounded-2xl h-14 w-full sm:flex-1 font-bold text-slate-500 border-slate-100 bg-slate-50/50"
-            >
-              إلغاء
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function TraderSummaryCard({ title, value, icon, trend, border }: any) {
+// --- مكون البطاقة الإحصائية (موجود مسبقاً في ملفك) ---
+function TraderSummaryCard({
+  title,
+  value,
+  icon: Icon,
+  trend,
+  bg,
+  border,
+}: any) {
   return (
     <Card
       className={cn(
-        "border shadow-sm rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-500 bg-white",
+        "border shadow-sm rounded-3xl overflow-hidden hover:-translate-y-1.5 transition-all duration-500 bg-white group",
         border,
       )}
     >
-      <CardContent className="p-6">
+      <CardContent className="p-7">
         <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
+          <div className="space-y-2">
+            <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none block">
               {title}
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-3xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
                 {value}
               </span>
-              <span className="text-[10px] text-emerald-600 font-black bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 shadow-sm">
-                {trend}
-              </span>
+              {trend && (
+                <span className="text-[10px] text-primary font-black bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 shadow-sm">
+                  {trend}
+                </span>
+              )}
             </div>
           </div>
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm text-slate-600">
-            {icon}
+          <div
+            className={cn(
+              "p-5 rounded-[22px] border shadow-inner transition-all group-hover:scale-110 duration-500",
+              bg,
+            )}
+          >
+            <Icon size={24} className="text-gray-700" />
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export default function TradersPage() {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // حالة الإضافة الجديدة (بدون trader_code)
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addData, setAddData] = useState({
+    trader_name: "",
+    contact_person: "",
+    phone: "",
+    email: "",
+    address: "",
+    tax_number: "",
+    opening_balance: 0,
+    credit_limit: 0,
+    isActive: true,
+  });
+
+  // حالة التعديل
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editData, setEditData] = useState({
+    id: 0,
+    trader_name: "",
+    trader_code: "", // نحتفظ به للعرض فقط
+    contact_person: "",
+    phone: "",
+    email: "",
+    address: "",
+    tax_number: "",
+    opening_balance: 0,
+    credit_limit: 0,
+    isActive: true,
+  });
+
+  const fetchData = async () => {
+    try {
+      const res = await apiClient.getTraders();
+      setData(res || []);
+    } catch (e) {
+      toast.error("فشل جلب البيانات");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiClient.createTrader(addData);
+      toast.success("تم إضافة التاجر بنجاح");
+      setIsAddOpen(false);
+      // تصفير البيانات
+      setAddData({
+        trader_name: "",
+        contact_person: "",
+        phone: "",
+        email: "",
+        address: "",
+        tax_number: "",
+        opening_balance: 0,
+        credit_limit: 0,
+        isActive: true,
+      });
+      fetchData();
+    } catch (e) {
+      toast.error("خطأ في إضافة التاجر");
+    }
+  };
+
+  const handleEditClick = (item: any) => {
+    setEditData({
+      id: item.id,
+      trader_name: item.trader_name || "",
+      trader_code: item.trader_code || "",
+      contact_person: item.contact_person || "",
+      phone: item.phone || "",
+      email: item.email || "",
+      address: item.address || "",
+      tax_number: item.tax_number || "",
+      opening_balance: item.opening_balance || 0,
+      credit_limit: item.credit_limit || 0,
+      isActive: item.isActive !== undefined ? item.isActive : true,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiClient.updateTrader(editData.id, editData);
+      toast.success("تم التعديل بنجاح");
+      setIsEditOpen(false);
+      fetchData();
+    } catch (e) {
+      toast.error("خطأ في التعديل");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("هل أنت متأكد من الحذف؟")) return;
+    try {
+      await apiClient.deleteTrader(id);
+      toast.success("تم الحذف بنجاح");
+      fetchData();
+    } catch (e) {
+      toast.error("خطأ في الحذف");
+    }
+  };
+
+  // فلترة البيانات بناءً على البحث
+  const filteredData = data.filter(
+    (item) =>
+      item.trader_name?.includes(searchQuery) ||
+      item.trader_code?.includes(searchQuery) ||
+      item.contact_person?.includes(searchQuery),
+  );
+
+  return (
+    <div className="space-y-6 pb-20">
+      {/* البطاقات الإحصائية */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <TraderSummaryCard
+          title="إجمالي التجار"
+          value={data.length}
+          icon={Users}
+          bg="bg-blue-50/50"
+          border="border-blue-100/50"
+        />
+        <TraderSummaryCard
+          title="التجار النشطين"
+          value={data.filter((t) => t.isActive).length}
+          icon={Building}
+          bg="bg-emerald-50/50"
+          border="border-emerald-100/50"
+        />
+        <TraderSummaryCard
+          title="إجمالي الأرصدة (دائن/مدين)"
+          value={data.reduce(
+            (acc, curr) => acc + Number(curr.opening_balance || 0),
+            0,
+          )}
+          icon={Wallet}
+          bg="bg-purple-50/50"
+          border="border-purple-100/50"
+        />
+      </div>
+
+      {/* الرأس والبحث والإضافة */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-3xl border shadow-sm">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute right-3 top-3 text-gray-400" size={18} />
+          <Input
+            placeholder="بحث عن تاجر، كود، أو مسؤول..."
+            className="rounded-xl pr-10 border-gray-200"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* نافذة الإضافة */}
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6 w-full sm:w-auto">
+              <Plus size={16} /> إضافة تاجر جديد
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            className="sm:max-w-[600px] rounded-2xl p-6 text-right"
+            dir="rtl"
+          >
+            <DialogHeader>
+              <DialogTitle className="text-right text-xl font-bold">
+                إضافة تاجر جديد
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleAdd} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label className="font-bold">
+                  اسم التاجر / الشركة <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  required
+                  value={addData.trader_name}
+                  onChange={(e) =>
+                    setAddData({ ...addData, trader_name: e.target.value })
+                  }
+                  className="rounded-xl"
+                  placeholder="شركة الأمل التجارية..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">الشخص المسؤول (المندوب)</Label>
+                  <div className="relative">
+                    <Users
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      value={addData.contact_person}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          contact_person: e.target.value,
+                        })
+                      }
+                      className="rounded-xl pr-10"
+                      placeholder="السيد أحمد..."
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">رقم التواصل</Label>
+                  <div className="relative">
+                    <Phone
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      value={addData.phone}
+                      onChange={(e) =>
+                        setAddData({ ...addData, phone: e.target.value })
+                      }
+                      className="rounded-xl pr-10 text-left"
+                      dir="ltr"
+                      placeholder="+90 5XX XXX XX XX"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">البريد الإلكتروني</Label>
+                  <div className="relative">
+                    <Mail
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      type="email"
+                      value={addData.email}
+                      onChange={(e) =>
+                        setAddData({ ...addData, email: e.target.value })
+                      }
+                      className="rounded-xl pr-10 text-left"
+                      dir="ltr"
+                      placeholder="info@company.com"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">الرقم الضريبي</Label>
+                  <Input
+                    value={addData.tax_number}
+                    onChange={(e) =>
+                      setAddData({ ...addData, tax_number: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold">العنوان</Label>
+                <div className="relative">
+                  <MapPin
+                    className="absolute right-3 top-3 text-gray-400"
+                    size={16}
+                  />
+                  <Input
+                    value={addData.address}
+                    onChange={(e) =>
+                      setAddData({ ...addData, address: e.target.value })
+                    }
+                    className="rounded-xl pr-10"
+                    placeholder="المدينة، المنطقة..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">الرصيد الافتتاحي</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={addData.opening_balance}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        opening_balance: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="rounded-xl text-left"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">
+                    الحد الائتماني (سقف الدين)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={addData.credit_limit}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        credit_limit: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="rounded-xl text-left"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={addData.isActive}
+                  onChange={(e) =>
+                    setAddData({ ...addData, isActive: e.target.checked })
+                  }
+                  className="w-4 h-4 rounded text-primary focus:ring-primary"
+                />
+                <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                  حساب التاجر نشط
+                </Label>
+              </div>
+
+              <Button type="submit" className="w-full rounded-xl mt-4">
+                حفظ التاجر
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* نافذة التعديل */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent
+          className="sm:max-w-[600px] rounded-2xl p-6 text-right"
+          dir="rtl"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-right text-xl font-bold">
+              تعديل بيانات التاجر
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label className="font-bold text-gray-500">
+                كود التاجر (للعرض فقط)
+              </Label>
+              <Input
+                disabled
+                value={editData.trader_code}
+                className="rounded-xl bg-gray-100 cursor-not-allowed text-center font-bold"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-bold">اسم التاجر / الشركة</Label>
+              <Input
+                required
+                value={editData.trader_name}
+                onChange={(e) =>
+                  setEditData({ ...editData, trader_name: e.target.value })
+                }
+                className="rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold">الشخص المسؤول</Label>
+                <Input
+                  value={editData.contact_person}
+                  onChange={(e) =>
+                    setEditData({ ...editData, contact_person: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">رقم التواصل</Label>
+                <Input
+                  value={editData.phone}
+                  onChange={(e) =>
+                    setEditData({ ...editData, phone: e.target.value })
+                  }
+                  className="rounded-xl text-left"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="editIsActive"
+                checked={editData.isActive}
+                onChange={(e) =>
+                  setEditData({ ...editData, isActive: e.target.checked })
+                }
+                className="w-4 h-4 rounded text-primary focus:ring-primary"
+              />
+              <Label
+                htmlFor="editIsActive"
+                className="font-bold cursor-pointer"
+              >
+                حساب التاجر نشط
+              </Label>
+            </div>
+
+            <Button type="submit" className="w-full rounded-xl mt-4">
+              حفظ التعديلات
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* جدول عرض التجار */}
+      <Card className="rounded-3xl border-none shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50/50 hover:bg-transparent">
+                <TableHead className="text-right font-bold py-5 px-6">
+                  الكود
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  التاجر / الشركة
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  المسؤول
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  رقم التواصل
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  الرصيد الافتتاحي
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  الحالة
+                </TableHead>
+                <TableHead className="text-center font-bold py-5 w-[120px]">
+                  إجراءات
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center py-10 text-gray-500"
+                  >
+                    جاري تحميل التجار...
+                  </TableCell>
+                </TableRow>
+              ) : filteredData.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center py-10 text-gray-500"
+                  >
+                    لا توجد بيانات مطابقة للبحث
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredData.map((item: any) => (
+                  <TableRow key={item.id} className="hover:bg-gray-50/50">
+                    <TableCell className="px-6 font-medium">
+                      <Badge
+                        variant="outline"
+                        className="font-mono text-xs bg-gray-50"
+                      >
+                        {item.trader_code}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-bold text-gray-900">
+                      {item.trader_name}
+                    </TableCell>
+                    <TableCell className="text-gray-500">
+                      {item.contact_person || "—"}
+                    </TableCell>
+                    <TableCell className="text-gray-500" dir="ltr">
+                      {item.phone || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={
+                          Number(item.opening_balance) > 0
+                            ? "text-emerald-600 font-bold"
+                            : Number(item.opening_balance) < 0
+                              ? "text-rose-600 font-bold"
+                              : "text-gray-500"
+                        }
+                      >
+                        {Number(item.opening_balance)
+                          .toLocaleString("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                          })
+                          .replace("$", "")}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {item.isActive ? (
+                        <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200">
+                          نشط
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-gray-500">
+                          متوقف
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditClick(item)}
+                          className="text-blue-500 hover:bg-blue-50 h-8 w-8 rounded-lg"
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(item.id)}
+                          className="text-rose-500 hover:bg-rose-50 h-8 w-8 rounded-lg"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
