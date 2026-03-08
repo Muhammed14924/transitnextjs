@@ -1,17 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Trash2, Edit, Plus, PackageOpen } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/app/components/ui/dialog";
-import { Label } from "@/app/components/ui/label";
+  Plus,
+  Trash2,
+  Edit,
+  PackageSearch,
+  Link as LinkIcon,
+  Box,
+  Tag,
+  LayoutGrid,
+  BarChart2,
+  Image as ImageIcon,
+} from "lucide-react";
+import Image from "next/image";
+import { cn } from "@/app/lib/utils";
+import { Card, CardContent } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -22,185 +26,195 @@ import {
 } from "@/app/components/ui/table";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/app/components/ui/dialog";
+import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
 export default function CompanyItemsPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    item_ar_name: "",
-    item_en_name: "",
-    company_name: "",
-    price: "",
-    item_type: "",
-  });
-
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editData, setEditData] = useState({
-    id: 0,
-    item_ar_name: "",
-    item_en_name: "",
-    company_name: "",
-    price: "",
-    item_type: "",
-  });
-
+  const [data, setData] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
-  const [itemTypes, setItemTypes] = useState<any[]>([]);
+  const [types, setTypes] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const fetchDropdowns = async () => {
-    try {
-      const cps = await apiClient.getCompanies();
-      if (cps) setCompanies(cps);
-      const types = await apiClient.getTypeofitems();
-      if (types) setItemTypes(types);
-    } catch (e) {}
+  const initialAddState = {
+    item_ar_name: "",
+    item_en_name: "",
+    company_name: "",
+    item_type: "",
+    unit: "1",
+    price: 0,
+    weight: 0,
+    package: "",
+    packet_weight: 0,
+    date_exp: "",
+    GTIP: "",
+    image: "",
+    ismain_item: true,
+    main_item: "",
+    isActive: true,
   };
 
-  const fetchItems = async () => {
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addData, setAddData] = useState(initialAddState);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editData, setEditData] = useState<any>(initialAddState);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+
+  const fetchData = async () => {
     try {
-      setLoading(true);
-      const data = await apiClient.getCompItems();
-      if (data) setItems(data);
-    } catch (error) {
-      toast.error("فشل جلب عناصر الشركات");
+      const [itemsRes, compRes, typesRes, unitsRes] = await Promise.all([
+        apiClient.getCompItems(),
+        apiClient.getCompanies(),
+        apiClient.getTypeofitems(),
+        apiClient.getUnits(),
+      ]);
+      setData(itemsRes || []);
+      setCompanies(compRes || []);
+      setTypes(typesRes || []);
+      setUnits(unitsRes || []);
+    } catch (e) {
+      toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchItems();
-    fetchDropdowns();
+    fetchData();
   }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdd = async (e?: any) => {
+    if (e) e.preventDefault();
+    if (!addData.company_name) return toast.error("يجب اختيار الشركة");
+    if (!addData.item_ar_name.trim()) return toast.error("يجب إدخال اسم الصنف");
     try {
-      await apiClient.createCompItem(formData);
-      toast.success("تمت الإضافة بنجاح");
+      let uploadedImageUrl = addData.image;
+      if (imageFile) {
+        const uploadRes = await apiClient.uploadFile(imageFile);
+        if (uploadRes && uploadRes.url) {
+          uploadedImageUrl = uploadRes.url;
+        }
+      }
+
+      await apiClient.createCompItem({ ...addData, image: uploadedImageUrl });
+      toast.success("تم إنشاء الصنف وتوليد الأكواد بنجاح");
       setIsAddOpen(false);
-      setFormData({
-        item_ar_name: "",
-        item_en_name: "",
-        company_name: "",
-        price: "",
-        item_type: "",
-      });
-      fetchItems();
-    } catch (error) {
-      toast.error("خطأ أثناء الإضافة");
+      setAddData(initialAddState);
+      setImageFile(null);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || "خطأ في الإضافة");
     }
   };
 
   const handleEditClick = (item: any) => {
     setEditData({
-      id: item.id,
-      item_ar_name: item.item_ar_name || "",
-      item_en_name: item.item_en_name || "",
-      company_name: item.company_name || "",
-      price: item.price !== null ? String(item.price) : "",
-      item_type: item.item_type || "",
+      ...item,
+      company_name: item.company_name.toString(),
+      item_type: item.item_type?.toString() || "",
+      unit: item.unit?.toString() || "1",
+      main_item: item.main_item?.toString() || "",
+      date_exp: item.date_exp
+        ? new Date(item.date_exp).toISOString().split("T")[0]
+        : "",
+      GTIP: item.GTIP || "",
+      image: item.image || "",
     });
+    setEditImageFile(null);
     setIsEditOpen(true);
   };
 
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEdit = async (e?: any) => {
+    if (e) e.preventDefault();
+    if (!editData.item_ar_name.trim())
+      return toast.error("يجب إدخال اسم الصنف");
     try {
-      await apiClient.updateCompItem(editData.id, editData);
+      let uploadedImageUrl = editData.image;
+      if (editImageFile) {
+        const uploadRes = await apiClient.uploadFile(editImageFile);
+        if (uploadRes && uploadRes.url) {
+          uploadedImageUrl = uploadRes.url;
+        }
+      }
+
+      await apiClient.updateCompItem(editData.id, {
+        ...editData,
+        image: uploadedImageUrl,
+      });
       toast.success("تم التعديل بنجاح");
       setIsEditOpen(false);
-      fetchItems();
-    } catch (error) {
-      toast.error("خطأ أثناء التعديل");
+      setEditImageFile(null);
+      fetchData();
+    } catch (e) {
+      toast.error("خطأ في التعديل");
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا العنصر؟")) return;
+    if (!confirm("هل أنت متأكد من الحذف؟")) return;
     try {
       await apiClient.deleteCompItem(id);
       toast.success("تم الحذف بنجاح");
-      fetchItems();
-    } catch (error) {
-      toast.error("فشل الحذف");
+      fetchData();
+    } catch (e) {
+      toast.error("خطأ في الحذف");
     }
   };
 
-  const filteredItems = items.filter(
-    (i) =>
-      i.item_ar_name?.includes(searchTerm) ||
-      i.item_en_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      i.companies?.company_name?.includes(searchTerm),
+  // filter main items for selected company to show in parent item list
+  const availableMainItems = data.filter(
+    (item) =>
+      item.company_name.toString() === addData.company_name &&
+      item.ismain_item === true,
   );
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            عناصر الشركات (المنتجات)
-          </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            سجل بجميع العناصر والمنتجات التابعة للشركات.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all px-6">
-                <Plus size={16} /> إضافة عنصر جديد
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] rounded-2xl p-6">
-              <DialogHeader>
-                <DialogTitle className="text-right text-xl font-bold">
-                  إضافة عنصر جديد
-                </DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={handleAdd}
-                className="space-y-4 pt-4 text-right"
-                dir="rtl"
-              >
-                <div className="space-y-2">
-                  <Label className="block font-bold">الاسم (عربي)</Label>
-                  <Input
-                    required
-                    value={formData.item_ar_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, item_ar_name: e.target.value })
-                    }
-                    className="rounded-xl bg-slate-50 border-slate-100"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="block font-bold">الاسم (إنجليزي)</Label>
-                  <Input
-                    value={formData.item_en_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, item_en_name: e.target.value })
-                    }
-                    className="rounded-xl bg-slate-50 border-slate-100"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="block font-bold">الشركة</Label>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <PackageSearch className="text-primary" /> إدارة الأصناف والمنتجات
+        </h1>
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2 bg-primary rounded-xl px-6">
+              <Plus size={16} /> إضافة صنف جديد
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
+            dir="rtl"
+          >
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold border-b pb-4">
+                إضافة صنف جديد للشركة
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6 pt-2">
+              {/* Company & Type */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2 sm:col-span-1">
+                  <Label className="font-bold text-blue-800">
+                    الشركة الموردة *
+                  </Label>
                   <select
-                    required
-                    className="flex w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    value={formData.company_name}
+                    value={addData.company_name}
                     onChange={(e) =>
-                      setFormData({ ...formData, company_name: e.target.value })
+                      setAddData({ ...addData, company_name: e.target.value })
                     }
+                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                   >
-                    <option value="">اختر الشركة...</option>
+                    <option value="">-- اختر الشركة --</option>
                     {companies.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.company_name}
@@ -208,264 +222,696 @@ export default function CompanyItemsPage() {
                     ))}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <Label className="block font-bold">التصنيف</Label>
+                <div className="space-y-2 col-span-2 sm:col-span-1">
+                  <Label className="font-bold text-blue-800">
+                    نوع الصنف (لتوليد الكود)
+                  </Label>
                   <select
-                    className="flex w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    value={formData.item_type}
+                    value={addData.item_type}
                     onChange={(e) =>
-                      setFormData({ ...formData, item_type: e.target.value })
+                      setAddData({ ...addData, item_type: e.target.value })
                     }
+                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                   >
-                    <option value="">اختر التصنيف...</option>
-                    {itemTypes.map((t) => (
+                    <option value="">-- اختر النوع --</option>
+                    {types.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.item_type}
                       </option>
                     ))}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <Label className="block font-bold">السعر</Label>
-                  <Input
-                    type="number"
-                    required
-                    value={formData.price}
-                    onChange={(e) =>
-                      setFormData({ ...formData, price: e.target.value })
-                    }
-                    className="rounded-xl bg-slate-50 border-slate-100"
-                  />
-                </div>
-                <DialogFooter className="mt-6 flex-col gap-2">
-                  <Button
-                    type="submit"
-                    className="w-full rounded-xl bg-primary"
-                  >
-                    حفظ وإضافة
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+              </div>
 
-          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-            <DialogContent className="sm:max-w-[425px] rounded-2xl p-6">
-              <DialogHeader>
-                <DialogTitle className="text-right text-xl font-bold">
-                  تعديل العنصر
-                </DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={handleEdit}
-                className="space-y-4 pt-4 text-right"
-                dir="rtl"
-              >
+              {/* Names */}
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="block font-bold">الاسم (عربي)</Label>
+                  <Label className="font-bold">اسم الصنف (عربي) *</Label>
                   <Input
-                    required
-                    value={editData.item_ar_name}
+                    value={addData.item_ar_name}
                     onChange={(e) =>
-                      setEditData({ ...editData, item_ar_name: e.target.value })
+                      setAddData({ ...addData, item_ar_name: e.target.value })
                     }
-                    className="rounded-xl bg-slate-50 border-slate-100"
+                    className="rounded-xl"
+                    placeholder="عصير مانجو..."
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="block font-bold">الاسم (إنجليزي)</Label>
+                  <Label className="font-bold">اسم الصنف (أجنبي)</Label>
                   <Input
-                    value={editData.item_en_name}
+                    value={addData.item_en_name}
                     onChange={(e) =>
-                      setEditData({ ...editData, item_en_name: e.target.value })
+                      setAddData({ ...addData, item_en_name: e.target.value })
                     }
-                    className="rounded-xl bg-slate-50 border-slate-100"
+                    className="rounded-xl text-left"
+                    dir="ltr"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="block font-bold">الشركة</Label>
-                  <select
-                    required
-                    className="flex w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    value={editData.company_name}
-                    onChange={(e) =>
-                      setEditData({ ...editData, company_name: e.target.value })
-                    }
-                  >
-                    <option value="">اختر الشركة...</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.company_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="block font-bold">التصنيف</Label>
-                  <select
-                    className="flex w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    value={editData.item_type}
-                    onChange={(e) =>
-                      setEditData({ ...editData, item_type: e.target.value })
-                    }
-                  >
-                    <option value="">اختر التصنيف...</option>
-                    {itemTypes.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.item_type}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="block font-bold">السعر</Label>
+                  <Label className="font-bold">السعر</Label>
                   <Input
                     type="number"
-                    required
-                    value={editData.price}
+                    step="0.01"
+                    value={addData.price}
                     onChange={(e) =>
-                      setEditData({ ...editData, price: e.target.value })
+                      setAddData({
+                        ...addData,
+                        price: parseFloat(e.target.value) || 0,
+                      })
                     }
-                    className="rounded-xl bg-slate-50 border-slate-100"
+                    className="rounded-xl"
                   />
                 </div>
-                <DialogFooter className="mt-6 flex-col gap-2">
-                  <Button
-                    type="submit"
-                    className="w-full rounded-xl bg-primary"
+                <div className="space-y-2">
+                  <Label className="font-bold">تاريخ الصلاحية</Label>
+                  <Input
+                    type="date"
+                    value={addData.date_exp}
+                    onChange={(e) =>
+                      setAddData({ ...addData, date_exp: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Parent/Child status */}
+              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="ismain"
+                    checked={addData.ismain_item}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        ismain_item: e.target.checked,
+                        main_item: "",
+                      })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label
+                    htmlFor="ismain"
+                    className="font-bold cursor-pointer text-emerald-900"
                   >
-                    حفظ التعديلات
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+                    صنف أساسي (رئيسي)
+                  </Label>
+                </div>
+
+                {!addData.ismain_item && (
+                  <div className="space-y-2">
+                    <Label className="font-bold flex items-center gap-2 text-emerald-800">
+                      <LinkIcon size={14} /> هذا الصنف نكهة/فرع تابع للمنتج
+                      الأساسي:
+                    </Label>
+                    <select
+                      value={addData.main_item}
+                      onChange={(e) =>
+                        setAddData({ ...addData, main_item: e.target.value })
+                      }
+                      className="flex h-10 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                    >
+                      <option value="">-- اختر المنتج الأساسي --</option>
+                      {availableMainItems.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.item_ar_name}
+                        </option>
+                      ))}
+                    </select>
+                    {availableMainItems.length === 0 &&
+                      addData.company_name && (
+                        <p className="text-xs text-rose-500">
+                          لا يوجد منتجات رئيسية لهذه الشركة بعد.
+                        </p>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* Logistic details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">الوحدة</Label>
+                  <select
+                    value={addData.unit}
+                    onChange={(e) =>
+                      setAddData({ ...addData, unit: e.target.value })
+                    }
+                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                  >
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.unit_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">التعبئة</Label>
+                  <Input
+                    value={addData.package}
+                    onChange={(e) =>
+                      setAddData({ ...addData, package: e.target.value })
+                    }
+                    className="rounded-xl"
+                    placeholder="6x24"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">الوزن</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={addData.weight}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        weight: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">الوزن القائم</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={addData.packet_weight}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        packet_weight: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">رمز التعرفة (GTIP)</Label>
+                  <Input
+                    type="number"
+                    value={addData.GTIP}
+                    onChange={(e) =>
+                      setAddData({ ...addData, GTIP: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold">صورة المنتج</Label>
+                <Input
+                  type="file"
+                  accept="image/jpeg, image/png, image/webp"
+                  onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <Button
+                type="button"
+                onClick={handleAdd}
+                className="w-full rounded-xl mt-4"
+              >
+                حفظ وتوليد الأكواد آلياً
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <Card className="border-slate-100 shadow-xl shadow-slate-200/50 rounded-[28px] overflow-hidden bg-white border-none">
-        <CardHeader className="bg-white border-b border-slate-50 py-8 px-8 flex flex-row items-center gap-4">
-          <div className="relative w-full max-w-md group">
-            <Search
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors"
-              size={20}
-            />
-            <Input
-              placeholder="ابحث باسم العنصر أو الشركة..."
-              className="pr-12 bg-slate-50 border-slate-100 focus:bg-white focus:border-primary/20 rounded-[20px] h-12 text-sm font-medium transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent
+          className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
+          dir="rtl"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold border-b pb-4">
+              تعديل بيانات الصنف
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-2 pb-2">
+              <div className="bg-slate-50 p-2 rounded-lg text-center">
+                <p className="text-xs text-slate-500 mb-1">تسلسل داخلي</p>
+                <p className="font-mono font-bold text-sm text-emerald-700">
+                  {editData.internal_code}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-2 rounded-lg text-center">
+                <p className="text-xs text-slate-500 mb-1">الكود المركب</p>
+                <p className="font-mono font-bold text-sm text-indigo-700">
+                  {editData.composite_code || "—"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold">اسم الصنف (عربي)</Label>
+                <Input
+                  value={editData.item_ar_name}
+                  onChange={(e) =>
+                    setEditData({ ...editData, item_ar_name: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">اسم الصنف (أجنبي)</Label>
+                <Input
+                  value={editData.item_en_name || ""}
+                  onChange={(e) =>
+                    setEditData({ ...editData, item_en_name: e.target.value })
+                  }
+                  className="rounded-xl text-left"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">السعر</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editData.price || 0}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      price: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">تاريخ الصلاحية</Label>
+                <Input
+                  type="date"
+                  value={editData.date_exp || ""}
+                  onChange={(e) =>
+                    setEditData({ ...editData, date_exp: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold">التعبئة</Label>
+                <Input
+                  value={editData.package || ""}
+                  onChange={(e) =>
+                    setEditData({ ...editData, package: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">الوزن</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editData.weight || 0}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      weight: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">الوزن القائم</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editData.packet_weight || 0}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      packet_weight: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">رمز التعرفة (GTIP)</Label>
+                <Input
+                  type="number"
+                  value={editData.GTIP || ""}
+                  onChange={(e) =>
+                    setEditData({ ...editData, GTIP: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-bold">تحديث صورة المنتج</Label>
+              <Input
+                type="file"
+                accept="image/jpeg, image/png, image/webp"
+                onChange={(e) => setEditImageFile(e.target.files?.[0] || null)}
+                className="rounded-xl"
+              />
+              {editData.image && !editImageFile && (
+                <p className="text-xs text-slate-500 mt-1">
+                  المنتج يمتلك صورة حالياً، ارفع ملف جديد لتغييرها.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="editIsActive"
+                checked={editData.isActive}
+                onChange={(e) =>
+                  setEditData({ ...editData, isActive: e.target.checked })
+                }
+                className="w-4 h-4 rounded text-primary"
+              />
+              <Label
+                htmlFor="editIsActive"
+                className="font-bold cursor-pointer"
+              >
+                الصنف مفعل
+              </Label>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleEdit}
+              className="w-full rounded-xl mt-4"
+            >
+              حفظ التعديلات
+            </Button>
           </div>
-        </CardHeader>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <ProductStatCard
+          title="إجمالي الأصناف"
+          value={loading ? "..." : data.length.toString()}
+          icon={<Box size={20} />}
+          color="blue"
+        />
+        <ProductStatCard
+          title="متوفر حالياً"
+          value={
+            loading
+              ? "..."
+              : data.filter((item: any) => item.isActive).length.toString()
+          }
+          icon={<Tag size={20} />}
+          color="amber"
+          detail="أصناف نشطة"
+        />
+        <ProductStatCard
+          title="فئات المنتجات"
+          value={loading ? "..." : types.length.toString()}
+          icon={<LayoutGrid size={20} />}
+          color="emerald"
+          detail="تصنيفات النظام"
+        />
+        <ProductStatCard
+          title="الشركات المتعاونة"
+          value={loading ? "..." : companies.length.toString()}
+          icon={<BarChart2 size={20} />}
+          color="rose"
+          detail="ملاك البضائع"
+        />
+      </div>
+
+      <Card className="rounded-2xl border-none shadow-sm bg-white overflow-hidden mt-6">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="border-slate-50 h-14">
-                <TableHead className="text-right font-black text-slate-400 text-xs px-8 uppercase">
-                  اسم العنصر (عربي/إنجليزي)
-                </TableHead>
-                <TableHead className="text-right font-black text-slate-400 text-xs px-4 uppercase">
-                  الشركة
-                </TableHead>
-                <TableHead className="text-center font-black text-slate-400 text-xs px-4 uppercase">
-                  التصنيف
-                </TableHead>
-                <TableHead className="text-center font-black text-slate-400 text-xs px-4 uppercase">
-                  السعر
-                </TableHead>
-                <TableHead className="text-center font-black text-slate-400 text-xs px-8 uppercase">
-                  الإجراءات
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-20 text-slate-300 font-bold italic"
-                  >
-                    جاري تحميل عناصر الشركات...
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50/50">
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الشركة
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الكود المركب
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    تسلسل داخلي
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    رقم الصنف
+                  </TableHead>
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
+                    الصورة
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الاسم (عربي)
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الاسم (أجنبي)
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    النوع
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الوحدة
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    التعبئة
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الوزن
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الوزن القائم
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    السعر
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    صلاحية
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    GTIP
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    المرجع (الأب)
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    أساسي/فرعي
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    الحالة
+                  </TableHead>
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
+                    إجراءات
+                  </TableHead>
                 </TableRow>
-              ) : filteredItems.length > 0 ? (
-                filteredItems.map((item) => (
-                  <TableRow
-                    key={item.id}
-                    className="hover:bg-slate-50/40 transition-all border-slate-50 h-[80px] group"
-                  >
-                    <TableCell className="px-8">
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 flex items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                          <PackageOpen size={20} />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-bold text-slate-900 text-sm">
-                            {item.item_ar_name || "غير محدد"}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                            {item.item_en_name || "N/A"}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className="text-[11px] font-bold text-slate-600 bg-slate-50 rounded-xl px-2 py-1 border-slate-200"
-                        >
-                          {item.companies?.company_name || "بدون شركة"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center px-4">
-                      <Badge className="bg-emerald-50 text-emerald-600 text-[10px] border-none font-bold rounded-full px-3 py-1 shadow-none">
-                        {item.typeofitems?.item_type || "عام"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center px-4">
-                      <span className="text-slate-600 font-black tabular-nums">
-                        {item.price} $
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-8 text-center">
-                      <div className="flex items-center justify-center gap-2 opacity-100 group-hover:opacity-100 transition-all">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="h-9 w-9 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="h-9 w-9 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={19} className="text-center py-8">
+                      جاري التحميل...
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-20 text-slate-400 font-bold"
-                  >
-                    لا توجد عناصر مطابقة.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ) : data.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={19}
+                      className="text-center py-8 text-slate-500"
+                    >
+                      لا توجد أصناف
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((item: any) => (
+                    <TableRow
+                      key={item.id}
+                      className={!item.ismain_item ? "bg-slate-50/30" : ""}
+                    >
+                      <TableCell className="font-bold text-blue-900 whitespace-nowrap">
+                        {item.companies?.company_name}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <Badge
+                          variant="outline"
+                          className="font-mono text-sm bg-indigo-50 border-indigo-200 text-indigo-700"
+                        >
+                          {item.composite_code || "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-emerald-700 whitespace-nowrap">
+                        {item.internal_code}
+                      </TableCell>
+                      <TableCell className="font-mono text-slate-700 whitespace-nowrap">
+                        {item.item_code}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {item.image ? (
+                          <div className="w-10 h-10 mx-auto rounded overflow-hidden border border-slate-200 bg-white flex items-center justify-center">
+                            <Image
+                              src={item.image}
+                              alt={item.item_ar_name}
+                              width={40}
+                              height={40}
+                              className="object-cover w-full h-full"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 mx-auto rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300">
+                            <ImageIcon size={16} />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-bold text-gray-900 whitespace-nowrap">
+                        {item.item_ar_name}
+                      </TableCell>
+                      <TableCell
+                        className="text-gray-700 whitespace-nowrap"
+                        dir="ltr"
+                      >
+                        {item.item_en_name || "—"}
+                      </TableCell>
+                      <TableCell className="text-gray-600 whitespace-nowrap">
+                        {item.typeofitems?.item_type || "—"}
+                      </TableCell>
+                      <TableCell className="text-gray-600 whitespace-nowrap">
+                        {item.units?.unit_name || "—"}
+                      </TableCell>
+                      <TableCell
+                        className="font-mono text-gray-600 whitespace-nowrap"
+                        dir="ltr"
+                      >
+                        {item.package || "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-gray-600 whitespace-nowrap">
+                        {item.weight || 0}
+                      </TableCell>
+                      <TableCell className="font-mono text-gray-600 whitespace-nowrap">
+                        {item.packet_weight || 0}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <span className="font-bold text-emerald-700">
+                          {item.price
+                            ? `$${parseFloat(item.price).toFixed(2)}`
+                            : "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {item.date_exp
+                          ? new Date(item.date_exp).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-indigo-600 whitespace-nowrap">
+                        {item.GTIP || "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {!item.ismain_item && item.parent_item ? (
+                          <span className="text-slate-600 flex items-center gap-1">
+                            <LinkIcon size={12} />{" "}
+                            {item.parent_item.item_ar_name}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {item.ismain_item ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">
+                            أساسي
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-slate-600">
+                            فرعي (نكهة)
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {item.isActive ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                            فعال
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                            غير فعال
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50 h-8 w-8"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50 h-8 w-8"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ProductStatCard({ title, value, icon, color, detail }: any) {
+  const colorMap: any = {
+    blue: "bg-blue-50 text-blue-600 border-blue-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    rose: "bg-rose-50 text-rose-600 border-rose-100",
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md hover:-translate-y-1 duration-300">
+      <div className="flex flex-col">
+        <span className="text-slate-400 text-[10px] font-black mb-1.5 uppercase tracking-widest leading-none">
+          {title}
+        </span>
+        <span className="text-2xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
+          {value}
+        </span>
+        {detail && (
+          <span className="text-[10px] text-slate-400 font-bold mt-2 flex items-center gap-1">
+            <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+            {detail}
+          </span>
+        )}
+      </div>
+      <div
+        className={cn(
+          "h-12 w-12 rounded-2xl flex items-center justify-center border shadow-sm transition-transform group-hover:scale-110",
+          colorMap[color],
+        )}
+      >
+        {icon}
+      </div>
     </div>
   );
 }

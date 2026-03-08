@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   X,
   MapPin,
+  Package,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
@@ -23,7 +24,6 @@ const navItems = [
   { name: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
   { name: "إدارة الشحنات", href: "/dashboard/shipments", icon: Truck },
   { name: "الشركات", href: "/dashboard/companies", icon: Building2 },
-  { name: "المنتجات", href: "/dashboard/products", icon: PackageSearch },
   { name: "بيانات النقل", href: "/dashboard/transport", icon: ShipWheel },
   { name: "التجار", href: "/dashboard/traders", icon: UserCheck },
   { name: "المستودعات", href: "/dashboard/depots", icon: Building2 },
@@ -31,9 +31,10 @@ const navItems = [
   { name: "البوابات", href: "/dashboard/gates", icon: PackageSearch },
   { name: "المنافذ", href: "/dashboard/ports", icon: ShipWheel },
   { name: "الوجهات", href: "/dashboard/destinations", icon: MapPin },
+  { name: "وحدات القياس", href: "/dashboard/units", icon: Package },
   { name: "أنواع العناصر", href: "/dashboard/item-types", icon: PackageSearch },
   {
-    name: "عناصر الشركات",
+    name: "إدارة الأصناف والمنتجات",
     href: "/dashboard/company-items",
     icon: PackageSearch,
   },

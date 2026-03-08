@@ -2,12 +2,19 @@
 //const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 class ApiClient {
   async request(endpoint: string, options: RequestInit = {}) {
+    const isFormData = options.body instanceof FormData;
+
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (!isFormData && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+
     const config: RequestInit = {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
       // هذا السطر مهم جداً لإرسال التوكن (Cookies) مع كل طلب
       credentials: "include",
     };
@@ -30,6 +37,16 @@ class ApiClient {
 
   async logout() {
     return this.request("/api/auth/logout", { method: "POST" });
+  }
+
+  // Upload
+  async uploadFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.request("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
   }
 
   // Dashboard Stats
@@ -380,6 +397,46 @@ class ApiClient {
   }
   deleteDestination(id: number) {
     return this.request(`/api/destinations/${id}`, { method: "DELETE" });
+  }
+
+  // --- Units ---
+  getUnits() {
+    return this.request("/api/units");
+  }
+  createUnit(data: any) {
+    return this.request("/api/units", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateUnit(id: number, data: any) {
+    return this.request(`/api/units/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteUnit(id: number) {
+    return this.request(`/api/units/${id}`, { method: "DELETE" });
+  }
+
+  // --- Company Items (Products) ---
+  getCompItems() {
+    return this.request("/api/comp_items");
+  }
+  createCompItem(data: any) {
+    return this.request("/api/comp_items", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateCompItem(id: number | string, data: any) {
+    return this.request(`/api/comp_items/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteCompItem(id: number | string) {
+    return this.request(`/api/comp_items/${id}`, { method: "DELETE" });
   }
 }
 

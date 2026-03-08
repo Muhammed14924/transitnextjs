@@ -2,24 +2,23 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const items = await prisma.comp_items.findMany({
       include: {
         companies: true,
         typeofitems: true,
         units: true,
-        tariff_schedule: true,
+        parent_item: true, // Fetch main item details if exists
       },
-      orderBy: { item_ar_name: "asc" },
+      orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(items);
   } catch (error) {
-    return NextResponse.json({ error: "Error fetching" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error fetching items" },
+      { status: 500 },
+    );
   }
 }
 
@@ -30,30 +29,94 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const max = await prisma.comp_items.aggregate({ _max: { id: true } });
-    const nextId = (max._max.id || 0) + 1;
+    const {
+      item_ar_name,
+      item_en_name,
+      company_name,
+      item_type,
+      unit,
+      price,
+      weight,
+      package: pkg,
+      packet_weight,
+      ismain_item,
+      main_item,
+      isActive,
+      date_exp,
+      GTIP,
+      image,
+    } = body;
 
-    const item = await prisma.comp_items.create({
-      data: {
-        id: nextId,
-        internal_code: body.internal_code
-          ? parseInt(body.internal_code)
-          : nextId,
-        item_ar_name: body.item_ar_name,
-        item_en_name: body.item_en_name || body.item_ar_name,
-        company_name: parseInt(body.company_name),
-        price: body.price ? parseFloat(body.price) : 0,
-        item_type: body.item_type ? parseInt(body.item_type) : null,
-        weight: body.weight ? parseInt(body.weight) : 0,
-        unit: body.unit ? parseInt(body.unit) : 1,
-        package: body.package || "N/A",
-        packet_weight: body.packet_weight ? parseInt(body.packet_weight) : 0,
-        item_code: body.item_code ? parseInt(body.item_code) : nextId,
-      },
+    // 1. Fetch Company Info
+    const company = await prisma.companies.findUnique({
+      where: { id: parseInt(company_name) },
     });
-    return NextResponse.json(item);
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Error creating" }, { status: 500 });
+    if (!company) throw new Error("Company not found");
+
+    // 2. Fetch Item Type Info
+    let typeCode = "000";
+    if (item_type) {
+      const typeInfo = await prisma.typeofitems.findUnique({
+        where: { id: parseInt(item_type) },
+      });
+      if (typeInfo) typeCode = typeInfo.typecode;
+    }
+
+    // 3. Generate internal_code
+    const lastInternalCodeItem = await prisma.comp_items.findFirst({
+      where: { company_name: parseInt(company_name) },
+      orderBy: { internal_code: "desc" },
+    });
+
+    const internal_code =
+      lastInternalCodeItem && lastInternalCodeItem.internal_code
+        ? lastInternalCodeItem.internal_code + 1
+        : company.first_internal_serial;
+
+    // 4. Generate item_code (Sequence within company)
+    const lastItemCode = await prisma.comp_items.findFirst({
+      where: { company_name: parseInt(company_name) },
+      orderBy: { item_code: "desc" },
+    });
+
+    const item_code =
+      lastItemCode && lastItemCode.item_code ? lastItemCode.item_code + 1 : 1;
+
+    // 5. Build composite_code: CompanyCode - TypeCode - ItemCode(4 digits)
+    const formattedItemCode = String(item_code).padStart(4, "0");
+    const composite_code = `${company.company_code}-${typeCode}-${formattedItemCode}`;
+
+    // Create item
+    const newItem = await prisma.comp_items.create({
+      data: {
+        item_ar_name,
+        item_en_name: item_en_name || null,
+        company_name: parseInt(company_name),
+        item_type: item_type ? parseInt(item_type) : null,
+        unit: unit ? parseInt(unit) : 1,
+        price: price ? parseFloat(price) : 0,
+        weight: weight ? parseFloat(weight) : 0,
+        package: pkg || null,
+        packet_weight: packet_weight ? parseFloat(packet_weight) : 0,
+        date_exp: date_exp ? new Date(date_exp) : null,
+        GTIP: GTIP ? parseInt(GTIP) : null,
+        image: image || null,
+        ismain_item: ismain_item || false,
+        main_item: !ismain_item && main_item ? parseInt(main_item) : null,
+        internal_code,
+        item_code,
+        composite_code,
+        isActive: isActive !== undefined ? isActive : true,
+      },
+      include: { companies: true, typeofitems: true, units: true },
+    });
+
+    return NextResponse.json(newItem, { status: 201 });
+  } catch (error: any) {
+    console.error("Error creating item:", error);
+    return NextResponse.json(
+      { error: error.message || "Error creating item" },
+      { status: 500 },
+    );
   }
 }

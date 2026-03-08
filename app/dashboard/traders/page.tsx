@@ -535,7 +535,16 @@ export default function TradersPage() {
                   رقم التواصل
                 </TableHead>
                 <TableHead className="text-right font-bold py-5">
+                  البريد الإلكتروني
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  الرقم الضريبي
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
                   الرصيد الافتتاحي
+                </TableHead>
+                <TableHead className="text-right font-bold py-5">
+                  الحد الائتماني
                 </TableHead>
                 <TableHead className="text-right font-bold py-5">
                   الحالة
@@ -549,7 +558,7 @@ export default function TradersPage() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={10}
                     className="text-center py-10 text-gray-500"
                   >
                     جاري تحميل التجار...
@@ -558,7 +567,7 @@ export default function TradersPage() {
               ) : filteredData.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={10}
                     className="text-center py-10 text-gray-500"
                   >
                     لا توجد بيانات مطابقة للبحث
@@ -581,8 +590,17 @@ export default function TradersPage() {
                     <TableCell className="text-gray-500">
                       {item.contact_person || "—"}
                     </TableCell>
-                    <TableCell className="text-gray-500" dir="ltr">
+                    <TableCell
+                      className="text-gray-500 font-mono text-right"
+                      dir="ltr"
+                    >
                       {item.phone || "—"}
+                    </TableCell>
+                    <TableCell className="text-gray-500 text-sm">
+                      {item.email || "—"}
+                    </TableCell>
+                    <TableCell className="font-mono text-gray-600 text-sm">
+                      {item.tax_number || "—"}
                     </TableCell>
                     <TableCell>
                       <span
@@ -591,10 +609,20 @@ export default function TradersPage() {
                             ? "text-emerald-600 font-bold"
                             : Number(item.opening_balance) < 0
                               ? "text-rose-600 font-bold"
-                              : "text-gray-500"
+                              : "text-gray-500 font-bold"
                         }
                       >
                         {Number(item.opening_balance)
+                          .toLocaleString("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                          })
+                          .replace("$", "")}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-gray-600 font-bold">
+                        {Number(item.credit_limit || 0)
                           .toLocaleString("en-US", {
                             style: "currency",
                             currency: "USD",

@@ -86,46 +86,76 @@ model codes_tables {
 }
 
 model comp_items {
-  id              Int              @id
-  internal_code   Int
-  item_ar_name    String           @db.VarChar(50)
-  item_en_name    String           @db.VarChar(50)
-  main_item       Int?
-  company_name    Int
-  price           Decimal?         @default(0.00) @db.Decimal(7, 2)
-  item_type       Int?
-  weight          Int
-  unit            Int              @default(1)
-  package         String           @db.VarChar(50)
-  packet_weight   Int
-  image           String?          @db.VarChar(255)
-  date_exp        DateTime?        @db.Date
-  item_code       Int
-  GTIP            Int?
-  ismain_item     Int              @default(0) @db.SmallInt
-  codes_tables    codes_tables[]
-  companies       companies        @relation(fields: [company_name], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_1")
-  typeofitems     typeofitems?     @relation(fields: [item_type], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_2")
-  tariff_schedule tariff_schedule? @relation(fields: [GTIP], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_3")
-  units           units            @relation(fields: [unit], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "comp_items_ibfk_4")
-  material_codes  material_codes[]
+  id               Int       @id @default(autoincrement())
+  
+  // -- الحقول المولدة آلياً --
+  internal_code    Int       // التسلسل الداخلي (مثال: 1000001)
+  item_code        Int       // ترتيب المنتج ضمن الشركة (1, 2, 3...)
+  composite_code   String?   @unique @db.VarChar(50) // الكود المركب (مثال: 001-015-0005)
+  
+  // -- البيانات الأساسية --
+  item_ar_name     String    @db.VarChar(100)
+  item_en_name     String?   @db.VarChar(100)
+  price            Decimal?  @default(0.00) @db.Decimal(10, 2)
+  weight           Decimal?  @default(0) @db.Decimal(10, 2)
+  package          String?   @db.VarChar(50)
+  packet_weight    Decimal?  @default(0) @db.Decimal(10, 2)
+  image            String?   @db.VarChar(255)
+  date_exp         DateTime? @db.Date
+  GTIP             Int?
+  
+  // -- نظام المنتجات الفرعية والرئيسية --
+  ismain_item      Boolean   @default(false)
+  main_item        Int?      // ID المنتج الرئيسي (يُترك فارغاً إذا كان هو الرئيسي)
+  
+  // -- حقول الحالة --
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  @@index([GTIP], map: "GTIP")
-  @@index([company_name], map: "company_name")
-  @@index([item_type], map: "item_type")
-  @@index([unit], map: "unit")
+  // -- المفاتيح الأجنبية --
+  company_name     Int       // يمثل company_id لكن احتفظنا بالاسم القديم لعدم كسر القاعدة
+  item_type        Int?
+  unit             Int       @default(1)
+
+  // -- العلاقات --
+  companies        companies     @relation(fields: [company_name], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  typeofitems      typeofitems?  @relation(fields: [item_type], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  units            units         @relation(fields: [unit], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tariff_schedule  tariff_schedule? @relation(fields: [GTIP], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  parent_item      comp_items?   @relation("ItemVariants", fields: [main_item], references: [id])
+  variants         comp_items[]  @relation("ItemVariants")
+
+  codes_tables     codes_tables[]
+  material_codes   material_codes[]
+
+  @@index([company_name])
+  @@index([item_type])
+  @@index([unit])
+  @@index([main_item])
 }
 
 model companies {
-  id                    Int                 @id
-  company_name          String?             @db.VarChar(100)
-  compen                String              @db.VarChar(100)
-  Sequence1             Int
-  Sequence2             Int
-  place                 String              @db.VarChar(50)
-  company_code          String              @db.VarChar(3)
-  logo                  String?             @db.VarChar(255)
-  first_internal_serial Int
+  id                    Int       @id @default(autoincrement())
+  company_name          String    @db.VarChar(100) // اسم الشركة بالعربي
+  compen                String?   @db.VarChar(100) // اسم الشركة بالانكليزي
+  place                 String?   @db.VarChar(50)  // البلد / الموقع
+  
+  // -- الحقول المولدة آلياً (الخوارزمية) --
+  company_code          String    @unique @db.VarChar(3) // الكود الثلاثي (001)
+  Sequence1             Int       // بداية تسلسل الفواتير (2600001)
+  Sequence2             Int       // نهاية تسلسل الفواتير (2601000)
+  first_internal_serial Int       // بداية تسلسل الأصناف الداخلي (1000000)
+  
+  logo                  String?   @db.VarChar(255)
+  
+  // -- حقول الحالة والتدقيق --
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // -- العلاقات --
   codes_tables          codes_tables[]
   comp_items            comp_items[]
   trans_2               trans_2[]
@@ -140,16 +170,17 @@ model companies {
 // }
 model depots {
   id             Int       @id @default(autoincrement())
-  depot_code     String    @unique @db.VarChar(3) // الكود الفريد (مثل 001) سنولده برمجياً
-  depot_name     String    @db.VarChar(50)        // اسم المستودع
+  depot_code     String    @unique @db.VarChar(3)
+  depot_name     String    @db.VarChar(50)
+  location       String?   @db.VarChar(100)
+  manager_name   String?   @db.VarChar(50)
+  contact_number String?   @db.VarChar(20)
   
-  // -- الحقول اللوجستية المقترحة --
-  location       String?   @db.VarChar(100)       // موقع أو عنوان المستودع
-  manager_name   String?   @db.VarChar(50)        // اسم أمين المستودع
-  contact_number String?   @db.VarChar(20)        // رقم تواصل المستودع
+  // -- حقول التسلسل المالي (مولدة آلياً) --
+  Sequence1      Int?      // بداية تسلسل فواتير المستودع (مثال: 2680001)
+  Sequence2      Int?      // نهاية التسلسل (مثال: 2681000)
   
-  // -- حقول الحالة والتدقيق --
-  isActive       Boolean   @default(true) 
+  isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -393,16 +424,46 @@ model transport_company {
   transport_transport_transport_companyTotransport_company transport[] @relation("transport_transport_companyTotransport_company")
 }
 
+// model typeofitems {
+//   id         Int          @id
+//   item_type  String       @db.VarChar(50)
+//   typecode   String       @db.VarChar(3)
+//   comp_items comp_items[]
+// }
+
 model typeofitems {
-  id         Int          @id
-  item_type  String       @db.VarChar(50)
-  typecode   String       @db.VarChar(3)
-  comp_items comp_items[]
+  id          Int          @id @default(autoincrement())
+  typecode    String       @unique @db.VarChar(3) // الكود الفريد المولد آلياً
+  item_type   String       @db.VarChar(100)       // اسم النوع (مثل: مشروب طاقة)
+  
+  // -- حقول إضافية مقترحة --
+  description String?      @db.VarChar(255)       // وصف إضافي لتوضيح النوع
+  isActive    Boolean      @default(true)         // هل هذا النوع متاح للاستخدام؟
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // -- العلاقات --
+  comp_items  comp_items[]
 }
 
+// model units {
+//   id         Int          @id
+//   unit_name  String       @default("طرد") @db.VarChar(50)
+//   comp_items comp_items[]
+// }
+
+
+
 model units {
-  id         Int          @id
-  unit_name  String       @default("طرد") @db.VarChar(50)
+  id         Int          @id @default(autoincrement())
+  unit_name  String       @unique @db.VarChar(50) // جعلناها فريدة لمنع تكرار نفس الوحدة
+  
+  // -- حقول الحالة والتدقيق --
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  // -- العلاقات --
   comp_items comp_items[]
 }
 

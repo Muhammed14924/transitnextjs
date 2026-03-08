@@ -1,25 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useAuth } from "@/app/providers/AuthProvider";
+import { useState, useEffect } from "react";
 import {
   Plus,
-  Search,
+  Trash2,
+  Edit,
   Building2,
   MapPin,
-  Phone,
-  Mail,
-  MoreVertical,
-  ExternalLink,
-  Edit,
-  Trash2,
-  Globe,
-  Briefcase,
-  TrendingUp,
-  ShieldCheck,
-  AlertTriangle,
+  Calculator,
+  Image as ImageIcon,
 } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import Image from "next/image";
+import { Card, CardContent } from "@/app/components/ui/card";
 import {
   Table,
   TableBody,
@@ -28,569 +20,519 @@ import {
   TableHeader,
   TableRow,
 } from "@/app/components/ui/table";
+import { Input } from "@/app/components/ui/input";
+import { Button } from "@/app/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
-import { Input } from "@/app/components/ui/input";
-import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/app/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
-import { cn } from "@/app/lib/utils";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
-interface Company {
-  id: number;
-  company_name: string;
-  company_code: string;
-  place: string;
-  _count?: {
-    transit_shipments: number;
-    comp_items: number;
-  };
-}
-
 export default function CompaniesPage() {
-  const { user } = useAuth();
-  const canWrite = user?.role === "ADMIN" || user?.role === "MANAGER";
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
 
-  const [formData, setFormData] = useState({
+  // Add State (Requires expected_invoices for calculation)
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addData, setAddData] = useState({
     company_name: "",
-    company_code: "",
+    compen: "",
     place: "",
+    expected_invoices: 1000,
+    isActive: true,
+    logo: "",
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
-  const fetchCompanies = useCallback(async () => {
+  // Edit State (Sequences are read-only)
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editData, setEditData] = useState({
+    id: 0,
+    company_name: "",
+    compen: "",
+    place: "",
+    isActive: true,
+    company_code: "",
+    Sequence1: 0,
+    Sequence2: 0,
+    logo: "",
+  });
+  const [editLogoFile, setEditLogoFile] = useState<File | null>(null);
+
+  const fetchData = async () => {
     try {
-      setLoading(true);
-      const data = await apiClient.getCompanies(searchTerm);
-      if (data) {
-        setCompanies(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch companies", error);
-      toast.error("فشل في تحميل البيانات");
+      const res = await apiClient.getCompanies();
+      setData(res || []);
+    } catch (e) {
+      toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm]);
+  };
 
   useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
+    fetchData();
+  }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdd = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!addData.company_name.trim()) {
+      toast.error("يرجى إدخال اسم الشركة بالعربي");
+      return;
+    }
+
     try {
-      await apiClient.createCompany(formData);
-      setIsAddDialogOpen(false);
-      setFormData({ company_name: "", company_code: "", place: "" });
-      fetchCompanies();
-      toast.success("تمت إضافة الشركة بنجاح");
-    } catch (error) {
-      console.error("Error creating company", error);
-      toast.error("حدث خطأ أثناء الإضافة");
+      let uploadedLogoUrl = addData.logo;
+      if (logoFile) {
+        const uploadRes = await apiClient.uploadFile(logoFile);
+        if (uploadRes && uploadRes.url) {
+          uploadedLogoUrl = uploadRes.url;
+        }
+      }
+
+      await apiClient.createCompany({ ...addData, logo: uploadedLogoUrl });
+      toast.success("تم الإضافة وتوليد التسلسلات بنجاح");
+      setIsAddOpen(false);
+      setAddData({
+        company_name: "",
+        compen: "",
+        place: "",
+        expected_invoices: 1000,
+        isActive: true,
+        logo: "",
+      });
+      setLogoFile(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "خطأ في الإضافة أو تعارض في التسلسل");
     }
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCompany) return;
-    try {
-      await apiClient.updateCompany(selectedCompany.id, formData);
-      setIsEditDialogOpen(false);
-      setSelectedCompany(null);
-      setFormData({ company_name: "", company_code: "", place: "" });
-      fetchCompanies();
-      toast.success("تم تحديث بيانات الشركة");
-    } catch (error) {
-      console.error("Error updating company", error);
-      toast.error("حدث خطأ أثناء التحديث");
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedCompany) return;
-    try {
-      await apiClient.deleteCompany(selectedCompany.id);
-      setIsDeleteDialogOpen(false);
-      setSelectedCompany(null);
-      fetchCompanies();
-      toast.success("تم حذف الشركة بنجاح");
-    } catch (error) {
-      console.error("Error deleting company", error);
-      toast.error("حدث خطأ أثناء الحذف");
-    }
-  };
-
-  const openEditDialog = (company: Company) => {
-    setSelectedCompany(company);
-    setFormData({
-      company_name: company.company_name,
-      company_code: company.company_code,
-      place: company.place,
+  const handleEditClick = (item: any) => {
+    setEditData({
+      id: item.id,
+      company_name: item.company_name || "",
+      compen: item.compen || "",
+      place: item.place || "",
+      isActive: item.isActive !== undefined ? item.isActive : true,
+      company_code: item.company_code,
+      Sequence1: item.Sequence1,
+      Sequence2: item.Sequence2,
+      logo: item.logo || "",
     });
-    setIsEditDialogOpen(true);
+    setEditLogoFile(null);
+    setIsEditOpen(true);
   };
 
-  const openDeleteDialog = (company: Company) => {
-    setSelectedCompany(company);
-    setIsDeleteDialogOpen(true);
+  const handleEdit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editData.company_name.trim()) {
+      toast.error("يرجى إدخال اسم الشركة بالعربي");
+      return;
+    }
+
+    try {
+      let uploadedLogoUrl = editData.logo;
+      if (editLogoFile) {
+        const uploadRes = await apiClient.uploadFile(editLogoFile);
+        if (uploadRes && uploadRes.url) {
+          uploadedLogoUrl = uploadRes.url;
+        }
+      }
+
+      await apiClient.updateCompany(editData.id, {
+        company_name: editData.company_name,
+        compen: editData.compen,
+        place: editData.place,
+        isActive: editData.isActive,
+        logo: uploadedLogoUrl,
+      });
+      toast.success("تم التعديل بنجاح");
+      setIsEditOpen(false);
+      setEditLogoFile(null);
+      fetchData();
+    } catch {
+      toast.error("خطأ في التعديل");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (
+      !confirm(
+        "هل أنت متأكد من الحذف؟ تحذير: قد يؤدي هذا لتدمير تسلسل الفواتير إذا لم يتم التعامل معه بحذر!",
+      )
+    )
+      return;
+    try {
+      await apiClient.deleteCompany(id);
+      toast.success("تم الحذف بنجاح");
+      fetchData();
+    } catch {
+      toast.error("لا يمكن الحذف لوجود ارتباطات سابقة.");
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            إدارة الشركات
-          </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            إدارة بيانات العملاء، الموردين، وشركات النقل المتعاقد معها.
-          </p>
-        </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+    <div className="space-y-6 pb-20">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Building2 className="text-primary" /> إدارة الشركات الموردة
+        </h1>
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
-            {canWrite ? (
-            <Button className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20">
-              <Plus size={16} />
-              إضافة شركة جديدة
+            <Button className="gap-2 bg-primary rounded-xl px-6">
+              <Plus size={16} /> إضافة شركة
             </Button>
-            ) : <span />}
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] rounded-2xl">
+          <DialogContent
+            className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
+            dir="rtl"
+          >
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-right text-slate-900">
-                إضافة شركة جديدة
+              <DialogTitle className="text-xl font-bold">
+                إضافة شركة وتوليد تسلسل
               </DialogTitle>
-              <DialogDescription className="text-right text-slate-500">
-                أدخل تفاصيل الشركة الجديدة ليتم تسجيلها في النظام.
-              </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleCreate}>
-              <div className="grid gap-5 py-6 rtl">
+            <div className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="company_name"
-                    className="text-right block font-bold text-slate-700"
-                  >
-                    اسم الشركة
-                  </Label>
+                  <Label className="font-bold">اسم الشركة (عربي)</Label>
                   <Input
-                    id="company_name"
-                    value={formData.company_name}
+                    value={addData.company_name}
                     onChange={(e) =>
-                      setFormData({ ...formData, company_name: e.target.value })
+                      setAddData({ ...addData, company_name: e.target.value })
                     }
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-primary/20"
-                    required
+                    className="rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="company_code"
-                    className="text-right block font-bold text-slate-700"
-                  >
-                    كود الشركة
-                  </Label>
+                  <Label className="font-bold">الاسم (إنجليزي)</Label>
                   <Input
-                    id="company_code"
-                    value={formData.company_code}
+                    value={addData.compen}
                     onChange={(e) =>
-                      setFormData({ ...formData, company_code: e.target.value })
+                      setAddData({ ...addData, compen: e.target.value })
                     }
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-primary/20"
-                    placeholder="مثال: ABC"
-                    maxLength={10}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="place"
-                    className="text-right block font-bold text-slate-700"
-                  >
-                    الموقع
-                  </Label>
-                  <Input
-                    id="place"
-                    value={formData.place}
-                    onChange={(e) =>
-                      setFormData({ ...formData, place: e.target.value })
-                    }
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-primary/20"
-                    required
+                    className="rounded-xl"
+                    dir="ltr"
                   />
                 </div>
               </div>
-              <DialogFooter className="flex-row-reverse sm:justify-start gap-2 pt-2">
-                <Button
-                  type="submit"
-                  className="rounded-xl px-10 h-11 bg-primary hover:bg-primary/90"
-                >
-                  حفظ
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => setIsAddDialogOpen(false)}
-                  className="rounded-xl h-11 px-6"
-                >
-                  إلغاء
-                </Button>
-              </DialogFooter>
-            </form>
+              <div className="space-y-2">
+                <Label className="font-bold">الدولة / الموقع</Label>
+                <div className="relative">
+                  <MapPin
+                    className="absolute right-3 top-3 text-gray-400"
+                    size={16}
+                  />
+                  <Input
+                    value={addData.place}
+                    onChange={(e) =>
+                      setAddData({ ...addData, place: e.target.value })
+                    }
+                    className="rounded-xl pr-10"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">شعار الشركة (Logo)</Label>
+                <Input
+                  type="file"
+                  accept="image/jpeg, image/png, image/webp"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl space-y-3">
+                <Label className="font-bold text-blue-900 flex items-center gap-2">
+                  <Calculator size={16} /> إعدادات تسلسل الفواتير للسنة الحالية
+                </Label>
+                <div className="space-y-2">
+                  <Label className="text-sm text-blue-800">
+                    العدد المتوقع للفواتير/السيارات (لتخصيص المجال)
+                  </Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={addData.expected_invoices}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        expected_invoices: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    className="rounded-xl bg-white"
+                  />
+                  <p className="text-xs text-blue-600">
+                    سيقوم النظام تلقائياً بتوليد كود الشركة، وحجز أرقام
+                    الفواتير، وبدء تسلسل الأصناف.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={addData.isActive}
+                  onChange={(e) =>
+                    setAddData({ ...addData, isActive: e.target.checked })
+                  }
+                  className="w-4 h-4 rounded text-primary"
+                />
+                <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                  الشركة مفعلة
+                </Label>
+              </div>
+              <Button
+                type="button"
+                onClick={handleAdd}
+                className="w-full rounded-xl mt-4"
+              >
+                إضافة وتوليد التسلسل
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <CompanyStatCard
-          title="إجمالي الشركات"
-          value={loading ? "..." : companies.length.toString()}
-          icon={<Building2 className="text-blue-600" size={20} />}
-          detail="قائمة الشركات المسجلة"
-        />
-        <CompanyStatCard
-          title="شركات نشطة حالياً"
-          value={loading ? "..." : companies.length.toString()}
-          icon={<ShieldCheck className="text-emerald-600" size={20} />}
-          detail="جاهزة للعمل"
-        />
-        <CompanyStatCard
-          title="أحدث الشركات"
-          value={loading ? "..." : companies[0]?.company_name || "لا يوجد"}
-          icon={<Briefcase className="text-amber-600" size={20} />}
-          detail="آخر إضافة لنظام"
-        />
-      </div>
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent
+          className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
+          dir="rtl"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              تعديل بيانات الشركة
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="grid grid-cols-3 gap-2 pb-2">
+              <div className="bg-slate-50 p-2 rounded-lg text-center">
+                <p className="text-xs text-slate-500 mb-1">كود الشركة</p>
+                <p className="font-mono font-bold text-sm">
+                  {editData.company_code}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-2 rounded-lg text-center col-span-2">
+                <p className="text-xs text-slate-500 mb-1">
+                  مجال الفواتير المحجوز
+                </p>
+                <p className="font-mono font-bold text-sm text-primary">
+                  {editData.Sequence1} - {editData.Sequence2}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-rose-500 text-center mb-4">
+              ملاحظة: الأرقام التسلسلية غير قابلة للتعديل للحفاظ على النظام
+              المالي.
+            </p>
 
-      <Card className="border-slate-100 shadow-sm rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
-        <CardHeader className="bg-white border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 py-8 px-6">
-          <div className="relative w-full md:w-96">
-            <Search
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-              size={18}
-            />
-            <Input
-              placeholder="بحث باسم الشركة، الموقع..."
-              className="pr-10 bg-slate-50 border-slate-200 focus-visible:ring-primary/20 rounded-xl h-11"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold">الاسم (عربي)</Label>
+                <Input
+                  value={editData.company_name}
+                  onChange={(e) =>
+                    setEditData({ ...editData, company_name: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">الاسم (إنجليزي)</Label>
+                <Input
+                  value={editData.compen}
+                  onChange={(e) =>
+                    setEditData({ ...editData, compen: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">الموقع</Label>
+              <div className="relative">
+                <MapPin
+                  className="absolute right-3 top-3 text-gray-400"
+                  size={16}
+                />
+                <Input
+                  value={editData.place}
+                  onChange={(e) =>
+                    setEditData({ ...editData, place: e.target.value })
+                  }
+                  className="rounded-xl pr-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">تحديث شعار الشركة</Label>
+              <Input
+                type="file"
+                accept="image/jpeg, image/png, image/webp"
+                onChange={(e) => setEditLogoFile(e.target.files?.[0] || null)}
+                className="rounded-xl"
+              />
+              {editData.logo && !editLogoFile && (
+                <p className="text-xs text-slate-500 mt-1">
+                  الشركة تمتلك شعار حالياً، ارفع ملف جديد لتغييره.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="editIsActive"
+                checked={editData.isActive}
+                onChange={(e) =>
+                  setEditData({ ...editData, isActive: e.target.checked })
+                }
+                className="w-4 h-4 rounded text-primary"
+              />
+              <Label
+                htmlFor="editIsActive"
+                className="font-bold cursor-pointer"
+              >
+                الشركة مفعلة
+              </Label>
+            </div>
             <Button
-              variant="outline"
-              onClick={() => fetchCompanies()}
-              className="h-11 rounded-xl border-slate-200 text-slate-600 px-6 font-medium bg-white hover:bg-slate-50"
+              type="button"
+              onClick={handleEdit}
+              className="w-full rounded-xl mt-4"
             >
-              تحديث البيانات
+              حفظ التعديلات
             </Button>
           </div>
-        </CardHeader>
+        </DialogContent>
+      </Dialog>
+
+      <Card className="rounded-2xl border-none shadow-sm bg-white">
         <CardContent className="p-0">
           <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="border-slate-100 h-12">
-                <TableHead className="text-right font-bold text-slate-700 px-6">
+            <TableHeader>
+              <TableRow className="bg-gray-50/50">
+                <TableHead className="text-right font-bold py-4">
+                  الكود
+                </TableHead>
+                <TableHead className="text-right font-bold py-4">
+                  الشعار
+                </TableHead>
+                <TableHead className="text-right font-bold py-4">
                   اسم الشركة
                 </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 px-4">
-                  الشحنات/الأصناف
-                </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 px-4">
+                <TableHead className="text-right font-bold py-4">
                   الموقع
                 </TableHead>
-                <TableHead className="text-right font-bold text-slate-700 px-4">
-                  الحالة
+                <TableHead className="text-center font-bold py-4">
+                  بداية التسلسل
                 </TableHead>
-                <TableHead className="text-center font-bold text-slate-700 px-6">
-                  الإجراءات
+                <TableHead className="text-center font-bold py-4">
+                  نهاية التسلسل
+                </TableHead>
+                <TableHead className="text-center font-bold py-4">
+                  تسلسل الأصناف
+                </TableHead>
+                <TableHead className="text-center font-bold py-4 w-[100px]">
+                  إجراءات
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {companies.length > 0 ? (
-                companies.map((company) => (
-                  <TableRow
-                    key={company.id}
-                    className="hover:bg-slate-50/50 transition-colors border-slate-100 h-[72px] group"
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    جاري التحميل...
+                  </TableCell>
+                </TableRow>
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="text-center py-8 text-slate-500"
                   >
-                    <TableCell className="px-6 font-medium">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 rounded-xl border border-slate-100 shadow-sm">
-                          <AvatarFallback className="bg-primary/5 text-primary font-black text-xs uppercase">
-                            {company.company_name?.substring(0, 2) || "CO"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-900 text-sm">
-                            {company.company_name}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-bold tracking-tight uppercase">
-                            #{company.company_code}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="inline-flex flex-col gap-0.5">
-                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                          <TrendingUp size={12} className="text-emerald-500" />
-                          {company._count?.transit_shipments || 0} شحنة
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {company._count?.comp_items || 0} صنف مسجل
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                        <MapPin size={14} className="text-slate-300" />
-                        <span>{company.place}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <Badge className="rounded-full font-bold px-3 py-0.5 h-6 border-none bg-emerald-50 text-emerald-600 shadow-sm">
-                        نشط
+                    لا توجد شركات
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((item: any) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className="font-mono text-sm bg-slate-50"
+                      >
+                        {item.company_code}
                       </Badge>
                     </TableCell>
-                    <TableCell className="px-6">
-                      <div className="flex items-center justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-200">
-                        {canWrite && (
+                    <TableCell>
+                      {item.logo ? (
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+                          <Image
+                            src={item.logo}
+                            alt={item.company_name}
+                            width={40}
+                            height={40}
+                            className="object-contain"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400">
+                          <ImageIcon size={20} />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-bold text-gray-900">
+                      {item.company_name}
+                    </TableCell>
+                    <TableCell className="text-gray-500">
+                      {item.place || "—"}
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-blue-700 font-medium">
+                      {item.Sequence1}
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-blue-700 font-medium">
+                      {item.Sequence2}
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-emerald-600 bg-emerald-50 rounded-lg">
+                      {item.first_internal_serial}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center items-center gap-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => openEditDialog(company)}
-                          className="h-9 w-9 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl"
+                          onClick={() => handleEditClick(item)}
+                          className="text-blue-500 hover:bg-blue-50"
                         >
                           <Edit size={16} />
                         </Button>
-                        )}
-                        {canWrite && (
-                        <DropdownMenu dir="rtl">
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-slate-400 hover:bg-slate-100 rounded-xl"
-                            >
-                              <MoreVertical size={16} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="w-48 rounded-2xl p-2 border-slate-100 shadow-xl"
-                          >
-                            <DropdownMenuItem className="gap-3 p-3 text-sm focus:bg-slate-50 rounded-xl cursor-pointer">
-                              <Globe size={16} className="text-slate-400" />{" "}
-                              زيارة الموقع
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openDeleteDialog(company)}
-                              className="gap-3 p-3 text-sm focus:bg-rose-50 text-rose-600 rounded-xl cursor-pointer"
-                            >
-                              <Trash2 size={16} /> حذف الشركة
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(item.id)}
+                          className="text-rose-500 hover:bg-rose-50"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-24">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100 border-dashed">
-                        <Building2 size={32} className="text-slate-200" />
-                      </div>
-                      <p className="text-slate-400 font-medium text-sm">
-                        {loading
-                          ? "جاري تحميل البيانات..."
-                          : "لا توجد شركات مسجلة حالياً"}
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-right text-slate-900">
-              تعديل بيانات الشركة
-            </DialogTitle>
-            <DialogDescription className="text-right text-slate-500">
-              قم بتحديث المعلومات اللازمة واضغط على حفظ التغييرات.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleUpdate}>
-            <div className="grid gap-5 py-6 rtl">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="edit_company_name"
-                  className="text-right block font-bold text-slate-700"
-                >
-                  اسم الشركة
-                </Label>
-                <Input
-                  id="edit_company_name"
-                  value={formData.company_name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, company_name: e.target.value })
-                  }
-                  className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-primary/20"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="edit_company_code"
-                  className="text-right block font-bold text-slate-700"
-                >
-                  كود الشركة
-                </Label>
-                <Input
-                  id="edit_company_code"
-                  value={formData.company_code}
-                  onChange={(e) =>
-                    setFormData({ ...formData, company_code: e.target.value })
-                  }
-                  className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-primary/20"
-                  maxLength={10}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="edit_place"
-                  className="text-right block font-bold text-slate-700"
-                >
-                  الموقع
-                </Label>
-                <Input
-                  id="edit_place"
-                  value={formData.place}
-                  onChange={(e) =>
-                    setFormData({ ...formData, place: e.target.value })
-                  }
-                  className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-primary/20"
-                  required
-                />
-              </div>
-            </div>
-            <DialogFooter className="flex-row-reverse sm:justify-start gap-2 pt-2">
-              <Button
-                type="submit"
-                className="rounded-xl px-10 h-11 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-              >
-                حفظ التغييرات
-              </Button>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setIsEditDialogOpen(false)}
-                className="rounded-xl h-11 px-6"
-              >
-                إلغاء
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl">
-          <DialogHeader>
-            <div className="h-12 w-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-100">
-              <AlertTriangle className="text-rose-600" size={24} />
-            </div>
-            <DialogTitle className="text-center font-bold text-slate-900 text-xl">
-              تأكيد الحذف
-            </DialogTitle>
-            <DialogDescription className="text-center text-slate-500 leading-relaxed py-2">
-              هل أنت متأكد من رغبتك في حذف شركة{" "}
-              <span className="font-bold text-slate-900">
-                "{selectedCompany?.company_name}"
-              </span>
-              ؟
-              <br />
-              هذا الإجراء لا يمكن التراجع عنه.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              className="rounded-xl h-11 w-full sm:flex-1 bg-rose-600 hover:bg-rose-700 font-bold"
-            >
-              نعم، قم بالحذف
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteDialogOpen(false)}
-              className="rounded-xl h-11 w-full sm:flex-1 font-medium text-slate-600 border-slate-200"
-            >
-              إلغاء
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
-  );
-}
-
-function CompanyStatCard({ title, value, icon, detail }: any) {
-  return (
-    <Card className="border-slate-100 shadow-sm rounded-2xl hover:shadow-md transition-all duration-300 overflow-hidden bg-white">
-      <CardContent className="p-6">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm">
-            {icon}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-              {title}
-            </span>
-            <span className="text-2xl font-black text-slate-900 tracking-tight leading-none mt-1">
-              {value}
-            </span>
-            <span className="text-[10px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
-              <div className="w-1 h-1 rounded-full bg-emerald-500"></div>
-              {detail}
-            </span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

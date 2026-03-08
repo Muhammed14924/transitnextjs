@@ -1,297 +1,7 @@
-// "use client";
-
-// import { useState, useEffect } from "react";
-// import { Plus, Trash2, Edit } from "lucide-react";
-// import { Card, CardContent } from "@/app/components/ui/card";
-// import {
-//   Table,
-//   TableBody,
-//   TableCell,
-//   TableHead,
-//   TableHeader,
-//   TableRow,
-// } from "@/app/components/ui/table";
-// import { Input } from "@/app/components/ui/input";
-// import { Button } from "@/app/components/ui/button";
-// import {
-//   Dialog,
-//   DialogContent,
-//   DialogHeader,
-//   DialogTitle,
-//   DialogTrigger,
-//   DialogFooter,
-// } from "@/app/components/ui/dialog";
-// import { Label } from "@/app/components/ui/label";
-// import { apiClient } from "@/app/lib/api-client";
-// import { toast } from "sonner";
-
-// export default function DepotsPage() {
-//   const [data, setData] = useState([]);
-//   const [loading, setLoading] = useState(true);
-
-//   // Add State
-//   const [isAddOpen, setIsAddOpen] = useState(false);
-//   const [addData, setAddData] = useState({
-//     depot_name: "",
-//     depot_place: "",
-//     depot_code: "",
-//   });
-
-//   // Edit State
-//   const [isEditOpen, setIsEditOpen] = useState(false);
-//   const [editData, setEditData] = useState({
-//     id: 0,
-//     depot_name: "",
-//     depot_place: "",
-//     depot_code: "",
-//   });
-
-//   const fetchData = async () => {
-//     try {
-//       const res = await apiClient.getDepots();
-//       setData(res || []);
-//     } catch (e) {
-//       toast.error("فشل جلب البيانات");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchData();
-//   }, []);
-
-//   const handleDelete = async (id: number | string) => {
-//     if (!confirm("هل أنت متأكد من الحذف؟")) return;
-//     try {
-//       await apiClient.deleteDepot(id);
-//       toast.success("تم الحذف بنجاح");
-//       fetchData();
-//     } catch (e) {
-//       toast.error("خطأ في الحذف");
-//     }
-//   };
-
-//   const handleAdd = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     try {
-//       await apiClient.createDepot(addData);
-//       toast.success("تمت الإضافة بنجاح");
-//       setIsAddOpen(false);
-//       setAddData({ depot_name: "", depot_place: "", depot_code: "" });
-//       fetchData();
-//     } catch (e) {
-//       toast.error("خطأ في الإضافة");
-//     }
-//   };
-
-//   const handleEditClick = (item: any) => {
-//     setEditData(item);
-//     setIsEditOpen(true);
-//   };
-
-//   const handleEdit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     try {
-//       await apiClient.updateDepot(editData.id, editData);
-//       toast.success("تم التعديل بنجاح");
-//       setIsEditOpen(false);
-//       fetchData();
-//     } catch (e) {
-//       toast.error("خطأ في التعديل");
-//     }
-//   };
-
-//   return (
-//     <div className="space-y-6 pb-20">
-//       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-//         <h1 className="text-2xl font-bold">المستودعات</h1>
-
-//         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-//           <DialogTrigger asChild>
-//             <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6">
-//               <Plus size={16} /> إضافة مستودع جديد
-//             </Button>
-//           </DialogTrigger>
-//           <DialogContent
-//             className="sm:max-w-[425px] rounded-2xl p-6 text-right"
-//             dir="rtl"
-//           >
-//             <DialogHeader>
-//               <DialogTitle className="text-right text-xl font-bold">
-//                 إضافة مستودع
-//               </DialogTitle>
-//             </DialogHeader>
-//             <form onSubmit={handleAdd} className="space-y-4 pt-4">
-//               <div className="space-y-2">
-//                 <Label className="block font-bold">الاسم</Label>
-//                 <Input
-//                   required
-//                   value={addData.depot_name}
-//                   onChange={(e) =>
-//                     setAddData({ ...addData, depot_name: e.target.value })
-//                   }
-//                   className="rounded-xl"
-//                 />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label className="block font-bold">المكان</Label>
-//                 <Input
-//                   value={addData.depot_place}
-//                   onChange={(e) =>
-//                     setAddData({ ...addData, depot_place: e.target.value })
-//                   }
-//                   className="rounded-xl"
-//                 />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label className="block font-bold">الرمز</Label>
-//                 <Input
-//                   value={addData.depot_code}
-//                   onChange={(e) =>
-//                     setAddData({ ...addData, depot_code: e.target.value })
-//                   }
-//                   className="rounded-xl"
-//                 />
-//               </div>
-//               <DialogFooter className="mt-6">
-//                 <Button type="submit" className="w-full rounded-xl bg-primary">
-//                   حفظ
-//                 </Button>
-//               </DialogFooter>
-//             </form>
-//           </DialogContent>
-//         </Dialog>
-
-//         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-//           <DialogContent
-//             className="sm:max-w-[425px] rounded-2xl p-6 text-right"
-//             dir="rtl"
-//           >
-//             <DialogHeader>
-//               <DialogTitle className="text-right text-xl font-bold">
-//                 تعديل المستودع
-//               </DialogTitle>
-//             </DialogHeader>
-//             <form onSubmit={handleEdit} className="space-y-4 pt-4">
-//               <div className="space-y-2">
-//                 <Label className="block font-bold">الاسم</Label>
-//                 <Input
-//                   required
-//                   value={editData.depot_name}
-//                   onChange={(e) =>
-//                     setEditData({ ...editData, depot_name: e.target.value })
-//                   }
-//                   className="rounded-xl"
-//                 />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label className="block font-bold">المكان</Label>
-//                 <Input
-//                   value={editData.depot_place}
-//                   onChange={(e) =>
-//                     setEditData({ ...editData, depot_place: e.target.value })
-//                   }
-//                   className="rounded-xl"
-//                 />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label className="block font-bold">الرمز</Label>
-//                 <Input
-//                   value={editData.depot_code}
-//                   onChange={(e) =>
-//                     setEditData({ ...editData, depot_code: e.target.value })
-//                   }
-//                   className="rounded-xl"
-//                 />
-//               </div>
-//               <DialogFooter className="mt-6">
-//                 <Button type="submit" className="w-full rounded-xl bg-primary">
-//                   حفظ التعديلات
-//                 </Button>
-//               </DialogFooter>
-//             </form>
-//           </DialogContent>
-//         </Dialog>
-//       </div>
-
-//       <Card>
-//         <CardContent className="p-0">
-//           <Table>
-//             <TableHeader className="bg-slate-50">
-//               <TableRow>
-//                 <TableHead className="text-right font-black">الاسم</TableHead>
-//                 <TableHead className="text-right font-black">المكان</TableHead>
-//                 <TableHead className="text-right font-black">الرمز</TableHead>
-//                 <TableHead className="text-center font-black">
-//                   الإجراءات
-//                 </TableHead>
-//               </TableRow>
-//             </TableHeader>
-//             <TableBody>
-//               {loading ? (
-//                 <TableRow>
-//                   <TableCell colSpan={4} className="text-center py-10">
-//                     جاري التحميل...
-//                   </TableCell>
-//                 </TableRow>
-//               ) : data.length === 0 ? (
-//                 <TableRow>
-//                   <TableCell
-//                     colSpan={4}
-//                     className="text-center py-10 text-slate-500"
-//                   >
-//                     لا توجد بيانات
-//                   </TableCell>
-//                 </TableRow>
-//               ) : (
-//                 data.map((item: any) => (
-//                   <TableRow key={item.id}>
-//                     <TableCell>{item.depot_name}</TableCell>
-//                     <TableCell>{item.depot_place}</TableCell>
-//                     <TableCell>{item.depot_code}</TableCell>
-//                     <TableCell className="text-center">
-//                       <div className="flex justify-center items-center gap-2">
-//                         <Button
-//                           variant="ghost"
-//                           size="icon"
-//                           onClick={() => handleEditClick(item)}
-//                           className="text-blue-500 hover:bg-blue-50"
-//                         >
-//                           <Edit size={16} />
-//                         </Button>
-//                         <Button
-//                           variant="ghost"
-//                           size="icon"
-//                           onClick={() => handleDelete(item.id)}
-//                           className="text-rose-500 hover:bg-rose-50"
-//                         >
-//                           <Trash2 size={16} />
-//                         </Button>
-//                       </div>
-//                     </TableCell>
-//                   </TableRow>
-//                 ))
-//               )}
-//             </TableBody>
-//           </Table>
-//         </CardContent>
-//       </Card>
-//     </div>
-//   );
-// }
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Plus,
-  Trash2,
-  Edit,
-  Activity,
-  MapPin,
-  User,
-  Phone,
-} from "lucide-react";
+import { Plus, Trash2, Edit, MapPin, Calculator, Building } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
   Table,
@@ -311,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
-import { Badge } from "@/app/components/ui/badge"; // استخدمنا Badge لعرض حالة المستودع
+import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
@@ -319,31 +29,31 @@ export default function DepotsPage() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // حالة الإضافة الجديدة (بدون depot_code)
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addData, setAddData] = useState({
     depot_name: "",
     location: "",
     manager_name: "",
     contact_number: "",
-    isActive: true, // المستودع نشط افتراضياً
+    expected_invoices: 1000,
+    isActive: true,
   });
 
-  // حالة التعديل
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editData, setEditData] = useState({
     id: 0,
     depot_name: "",
-    depot_code: "", // نحتفظ به للعرض فقط أثناء التعديل
+    depot_code: "",
     location: "",
     manager_name: "",
     contact_number: "",
     isActive: true,
+    Sequence1: 0,
+    Sequence2: 0,
   });
 
   const fetchData = async () => {
     try {
-      // يجب أن يتم إرجاع الحقول الجديدة من الـ API ضمن البيانات
       const res = await apiClient.getDepots();
       setData(res || []);
     } catch (e) {
@@ -357,7 +67,6 @@ export default function DepotsPage() {
     fetchData();
   }, []);
 
-  // تعديل وظيفة الحذف (يمكنك لاحقاً تحويلها لإيقاف التفعيل بدل الحذف النهائي)
   const handleDelete = async (id: number | string) => {
     if (!confirm("هل أنت متأكد من الحذف؟")) return;
     try {
@@ -369,28 +78,28 @@ export default function DepotsPage() {
     }
   };
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdd = async (e?: any) => {
+    if (e) e.preventDefault();
+    if (!addData.depot_name.trim()) {
+      toast.error("يرجى إدخال اسم المستودع");
+      return;
+    }
+
     try {
-      const result = await apiClient.createDepot(addData);
-      if (!result) {
-        toast.error("غير مصرح لك بالإضافة. يرجى تسجيل الدخول مرة أخرى.");
-        return;
-      }
-      toast.success("تمت الإضافة بنجاح");
+      await apiClient.createDepot(addData);
+      toast.success("تمت الإضافة وتوليد التسلسلات بنجاح");
       setIsAddOpen(false);
-      // تصفير البيانات بعد الإضافة
       setAddData({
         depot_name: "",
         location: "",
         manager_name: "",
         contact_number: "",
+        expected_invoices: 1000,
         isActive: true,
       });
       fetchData();
     } catch (e: any) {
-      console.error("Error creating depot:", e);
-      toast.error(e?.message || "خطأ في الإضافة");
+      toast.error(e.message || "خطأ في الإضافة");
     }
   };
 
@@ -403,114 +112,122 @@ export default function DepotsPage() {
       manager_name: item.manager_name || "",
       contact_number: item.contact_number || "",
       isActive: item.isActive !== undefined ? item.isActive : true,
+      Sequence1: item.Sequence1,
+      Sequence2: item.Sequence2,
     });
     setIsEditOpen(true);
   };
 
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEdit = async (e?: any) => {
+    if (e) e.preventDefault();
+    if (!editData.depot_name.trim()) {
+      toast.error("يرجى إدخال اسم المستودع");
+      return;
+    }
+
     try {
-      const result = await apiClient.updateDepot(editData.id, editData);
-      if (!result) {
-        toast.error("غير مصرح لك بالتعديل. يرجى تسجيل الدخول مرة أخرى.");
-        return;
-      }
+      await apiClient.updateDepot(editData.id, editData);
       toast.success("تم التعديل بنجاح");
       setIsEditOpen(false);
       fetchData();
-    } catch (e: any) {
-      console.error("Error updating depot:", e);
-      toast.error(e?.message || "خطأ في التعديل");
+    } catch (e) {
+      toast.error("خطأ في التعديل");
     }
   };
 
   return (
     <div className="space-y-6 pb-20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold">المستودعات</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Building className="text-primary" /> المستودعات (المراكز)
+        </h1>
 
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6 cursor-pointer">
-              <Plus size={16} /> إضافة مستودع جديد
+            <Button className="gap-2 bg-primary rounded-xl px-6">
+              <Plus size={16} /> إضافة مستودع
             </Button>
           </DialogTrigger>
           <DialogContent
-            className="sm:max-w-[425px] rounded-2xl p-6 text-right"
+            className="sm:max-w-[500px] rounded-2xl p-6 text-right"
             dir="rtl"
           >
             <DialogHeader>
-              <DialogTitle className="text-right text-xl font-bold">
-                إضافة مستودع
+              <DialogTitle className="text-xl font-bold">
+                إضافة مستودع جديد
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4 pt-4">
+            <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label className="block font-bold">اسم المستودع</Label>
+                <Label className="font-bold">اسم المستودع</Label>
                 <Input
-                  required
                   value={addData.depot_name}
                   onChange={(e) =>
                     setAddData({ ...addData, depot_name: e.target.value })
                   }
                   className="rounded-xl"
-                  placeholder="مستودع العبور..."
                 />
               </div>
 
-              {/* الحقول اللوجستية الجديدة */}
-              <div className="space-y-2">
-                <Label className="block font-bold">الموقع / العنوان</Label>
-                <div className="relative">
-                  <MapPin
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">الموقع</Label>
                   <Input
                     value={addData.location}
                     onChange={(e) =>
                       setAddData({ ...addData, location: e.target.value })
                     }
-                    className="rounded-xl pr-10"
-                    placeholder="المدينة، المنطقة..."
+                    className="rounded-xl"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="block font-bold">أمين المستودع</Label>
-                <div className="relative">
-                  <User
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
+                <div className="space-y-2">
+                  <Label className="font-bold">أمين المستودع</Label>
                   <Input
                     value={addData.manager_name}
                     onChange={(e) =>
                       setAddData({ ...addData, manager_name: e.target.value })
                     }
-                    className="rounded-xl pr-10"
-                    placeholder="اسم المسؤول..."
+                    className="rounded-xl"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label className="block font-bold">رقم التواصل</Label>
-                <div className="relative">
-                  <Phone
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
+                <Label className="font-bold">رقم التواصل</Label>
+                <Input
+                  value={addData.contact_number}
+                  onChange={(e) =>
+                    setAddData({ ...addData, contact_number: e.target.value })
+                  }
+                  className="rounded-xl text-left"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl space-y-3">
+                <Label className="font-bold text-emerald-900 flex items-center gap-2">
+                  <Calculator size={16} /> إعدادات تسلسل الفواتير
+                </Label>
+                <div className="space-y-2">
+                  <Label className="text-sm text-emerald-800">
+                    العدد المتوقع للفواتير (الافتراضي 1000)
+                  </Label>
                   <Input
-                    value={addData.contact_number}
+                    type="number"
+                    min="1"
+                    value={addData.expected_invoices}
                     onChange={(e) =>
-                      setAddData({ ...addData, contact_number: e.target.value })
+                      setAddData({
+                        ...addData,
+                        expected_invoices: parseInt(e.target.value) || 0,
+                      })
                     }
-                    className="rounded-xl pr-10 text-left"
-                    dir="ltr"
-                    placeholder="+90 5XX XXX XX XX"
+                    className="rounded-xl bg-white"
                   />
+                  <p className="text-xs text-emerald-600">
+                    سيقوم النظام بتوليد التسلسل تلقائياً في المجال المخصص
+                    للمستودعات (80000+).
+                  </p>
                 </div>
               </div>
 
@@ -522,49 +239,53 @@ export default function DepotsPage() {
                   onChange={(e) =>
                     setAddData({ ...addData, isActive: e.target.checked })
                   }
-                  className="w-4 h-4 rounded text-primary focus:ring-primary"
+                  className="w-4 h-4 rounded text-primary"
                 />
                 <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  المستودع نشط ويعمل حالياً
+                  المستودع نشط
                 </Label>
               </div>
-
-              <Button type="submit" className="w-full rounded-xl mt-4">
-                حفظ المستودع
+              <Button
+                type="button"
+                onClick={handleAdd}
+                className="w-full rounded-xl mt-4"
+              >
+                حفظ وتوليد التسلسل
               </Button>
-            </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* نافذة التعديل */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent
-          className="sm:max-w-[425px] rounded-2xl p-6 text-right"
+          className="sm:max-w-[500px] rounded-2xl p-6 text-right"
           dir="rtl"
         >
           <DialogHeader>
-            <DialogTitle className="text-right text-xl font-bold">
+            <DialogTitle className="text-xl font-bold">
               تعديل المستودع
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleEdit} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label className="block font-bold text-gray-500">
-                كود المستودع (للعرض فقط)
-              </Label>
-              <Input
-                disabled
-                value={editData.depot_code}
-                className="rounded-xl bg-gray-100 cursor-not-allowed text-center font-bold"
-                dir="ltr"
-              />
+          <div className="space-y-4 pt-4">
+            <div className="grid grid-cols-3 gap-2 pb-2">
+              <div className="bg-slate-50 p-2 rounded-lg text-center">
+                <p className="text-xs text-slate-500 mb-1">كود المركز</p>
+                <p className="font-mono font-bold text-sm">
+                  {editData.depot_code}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-2 rounded-lg text-center col-span-2">
+                <p className="text-xs text-slate-500 mb-1">تسلسل الفواتير</p>
+                <p className="font-mono font-bold text-sm text-primary">
+                  {editData.Sequence1 || "—"} - {editData.Sequence2 || "—"}
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="block font-bold">الاسم</Label>
+              <Label className="font-bold">الاسم</Label>
               <Input
-                required
                 value={editData.depot_name}
                 onChange={(e) =>
                   setEditData({ ...editData, depot_name: e.target.value })
@@ -573,38 +294,27 @@ export default function DepotsPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="block font-bold">الموقع / العنوان</Label>
-              <Input
-                value={editData.location}
-                onChange={(e) =>
-                  setEditData({ ...editData, location: e.target.value })
-                }
-                className="rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="block font-bold">أمين المستودع</Label>
-              <Input
-                value={editData.manager_name}
-                onChange={(e) =>
-                  setEditData({ ...editData, manager_name: e.target.value })
-                }
-                className="rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="block font-bold">رقم التواصل</Label>
-              <Input
-                value={editData.contact_number}
-                onChange={(e) =>
-                  setEditData({ ...editData, contact_number: e.target.value })
-                }
-                className="rounded-xl text-left"
-                dir="ltr"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold">الموقع</Label>
+                <Input
+                  value={editData.location}
+                  onChange={(e) =>
+                    setEditData({ ...editData, location: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">أمين المستودع</Label>
+                <Input
+                  value={editData.manager_name}
+                  onChange={(e) =>
+                    setEditData({ ...editData, manager_name: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2 pt-2">
@@ -615,7 +325,7 @@ export default function DepotsPage() {
                 onChange={(e) =>
                   setEditData({ ...editData, isActive: e.target.checked })
                 }
-                className="w-4 h-4 rounded text-primary focus:ring-primary"
+                className="w-4 h-4 rounded text-primary"
               />
               <Label
                 htmlFor="editIsActive"
@@ -624,30 +334,33 @@ export default function DepotsPage() {
                 المستودع نشط
               </Label>
             </div>
-
-            <Button type="submit" className="w-full rounded-xl mt-4">
+            <Button
+              type="button"
+              onClick={handleEdit}
+              className="w-full rounded-xl mt-4"
+            >
               حفظ التعديلات
             </Button>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
-      <Card className="rounded-2xl border-none shadow-sm">
+      <Card className="rounded-2xl border-none shadow-sm bg-white">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+              <TableRow className="bg-gray-50/50">
                 <TableHead className="text-right font-bold py-4">
                   الكود
                 </TableHead>
                 <TableHead className="text-right font-bold py-4">
                   اسم المستودع
                 </TableHead>
-                <TableHead className="text-right font-bold py-4">
-                  الموقع
+                <TableHead className="text-center font-bold py-4">
+                  بداية التسلسل
                 </TableHead>
-                <TableHead className="text-right font-bold py-4">
-                  أمين المستودع
+                <TableHead className="text-center font-bold py-4">
+                  نهاية التسلسل
                 </TableHead>
                 <TableHead className="text-right font-bold py-4">
                   الحالة
@@ -660,10 +373,7 @@ export default function DepotsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-8 text-gray-500"
-                  >
+                  <TableCell colSpan={6} className="text-center py-8">
                     جاري التحميل...
                   </TableCell>
                 </TableRow>
@@ -671,7 +381,7 @@ export default function DepotsPage() {
                 <TableRow>
                   <TableCell
                     colSpan={6}
-                    className="text-center py-8 text-gray-500"
+                    className="text-center py-8 text-slate-500"
                   >
                     لا توجد بيانات
                   </TableCell>
@@ -679,27 +389,33 @@ export default function DepotsPage() {
               ) : (
                 data.map((item: any) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      <Badge variant="outline" className="font-mono text-xs">
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className="font-mono bg-slate-50"
+                      >
                         {item.depot_code}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-bold">
+                    <TableCell className="font-bold text-gray-900">
                       {item.depot_name}
                     </TableCell>
-                    <TableCell className="text-gray-500">
-                      {item.location || "—"}
+                    <TableCell className="text-center font-mono text-emerald-700 font-medium">
+                      {item.Sequence1 || "—"}
                     </TableCell>
-                    <TableCell className="text-gray-500">
-                      {item.manager_name || "—"}
+                    <TableCell className="text-center font-mono text-emerald-700 font-medium">
+                      {item.Sequence2 || "—"}
                     </TableCell>
                     <TableCell>
                       {item.isActive ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200">
+                        <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">
                           نشط
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="text-gray-500">
+                        <Badge
+                          variant="secondary"
+                          className="text-rose-600 bg-rose-50 border-rose-200"
+                        >
                           متوقف
                         </Badge>
                       )}
@@ -710,7 +426,7 @@ export default function DepotsPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50 cursor-pointer"
+                          className="text-blue-500 hover:bg-blue-50"
                         >
                           <Edit size={16} />
                         </Button>
@@ -718,7 +434,7 @@ export default function DepotsPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50 cursor-pointer"
+                          className="text-rose-500 hover:bg-rose-50"
                         >
                           <Trash2 size={16} />
                         </Button>
