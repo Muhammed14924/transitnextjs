@@ -88,6 +88,31 @@ class ApiClient {
     });
   }
 
+  async getShipmentDocuments(shipmentId: number | string) {
+    return this.request(`/api/shipments/${shipmentId}/documents`);
+  }
+
+  async createShipmentDocument(shipmentId: number | string, data: any) {
+    return this.request(`/api/shipments/${shipmentId}/documents`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadToS3(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    // Don't set Content-Type header for FormData - browser sets it with boundary
+    return this.request("/api/upload-s3", {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  async getShippingCompanies() {
+    return this.request("/api/shipment-comps");
+  }
+
   async deleteShipment(id: number | string) {
     return this.request(`/api/shipments/${id}`, {
       method: "DELETE",
@@ -417,26 +442,6 @@ class ApiClient {
   }
   deleteUnit(id: number) {
     return this.request(`/api/units/${id}`, { method: "DELETE" });
-  }
-
-  // --- Company Items (Products) ---
-  getCompItems() {
-    return this.request("/api/comp_items");
-  }
-  createCompItem(data: any) {
-    return this.request("/api/comp_items", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-  updateCompItem(id: number | string, data: any) {
-    return this.request(`/api/comp_items/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  }
-  deleteCompItem(id: number | string) {
-    return this.request(`/api/comp_items/${id}`, { method: "DELETE" });
   }
 }
 

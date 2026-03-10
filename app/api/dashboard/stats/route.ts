@@ -16,11 +16,7 @@ export async function GET() {
         prisma.companies.count(),
         prisma.transit_shipments.count({
           where: {
-            OR: [
-              { status: "قيد المعالجة" },
-              { status: "Pending" },
-              { status: "0" },
-            ],
+            status: "PENDING",
           },
         }),
       ]);
@@ -31,23 +27,23 @@ export async function GET() {
 
     const historyRaw = await prisma.transit_shipments.findMany({
       where: {
-        shipping_date: {
+        createdAt: {
           gt: thirtyDaysAgo,
         },
       },
       select: {
-        shipping_date: true,
+        createdAt: true,
       },
       orderBy: {
-        shipping_date: "asc",
+        createdAt: "asc",
       },
     });
 
     // Simple grouping by date
     const historyMap: Record<string, number> = {};
     historyRaw.forEach((s) => {
-      if (s.shipping_date) {
-        const dateStr = s.shipping_date.toISOString().split("T")[0];
+      if (s.createdAt) {
+        const dateStr = s.createdAt.toISOString().split("T")[0];
         historyMap[dateStr] = (historyMap[dateStr] || 0) + 1;
       }
     });

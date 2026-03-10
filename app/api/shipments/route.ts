@@ -14,19 +14,19 @@ export async function GET(req: Request) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = parseInt(searchParams.get("offset") || "0");
     const status = searchParams.get("status") || undefined;
-    const q = searchParams.get("q") || undefined; // search term
+    const q = searchParams.get("q") || undefined;
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       AND: [
         status ? { status } : {},
         q
           ? {
               OR: [
                 { shipment_number: { contains: q, mode: "insensitive" } },
-                { container_number: { contains: q, mode: "insensitive" } },
-                { invoice_number: { contains: q, mode: "insensitive" } },
+                { bl_number: { contains: q, mode: "insensitive" } },
+                { containers_numbers: { contains: q, mode: "insensitive" } },
                 {
-                  companies: {
+                  sender_company: {
                     company_name: { contains: q, mode: "insensitive" },
                   },
                 },
@@ -36,26 +36,38 @@ export async function GET(req: Request) {
       ],
     };
 
-    const [shipments, total] = await Promise.all([
-      prisma.transit_shipments.findMany({
-        take: limit,
-        skip: offset,
-        where,
-        include: {
-          companies: {
-            select: { company_name: true },
+    const [shipments, total, pendingCount, deliveredCount, inTransitCount] =
+      await Promise.all([
+        prisma.transit_shipments.findMany({
+          take: limit,
+          skip: offset,
+          where,
+          include: {
+            sender_company: {
+              select: { company_name: true },
+            },
+            loading_port: {
+              select: { port_name: true, country: true },
+            },
+            discharge_port: {
+              select: { port_name: true, city: true },
+            },
+            shipment_comp: {
+              select: { ship_comp: true },
+            },
+            documents: {
+              select: { id: true },
+            },
           },
-          ports: {
-            select: { port_name: true },
-          },
-          shipment_comp: {
-            select: { ship_comp: true },
-          },
-        },
-        orderBy: { shipping_date: "desc" },
-      }),
-      prisma.transit_shipments.count({ where }),
-    ]);
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.transit_shipments.count({ where }),
+        prisma.transit_shipments.count({ where: { status: "PENDING" } }),
+        prisma.transit_shipments.count({ where: { status: "DELIVERED" } }),
+        prisma.transit_shipments.count({
+          where: { status: { in: ["IN_TRANSIT", "ARRIVED"] } },
+        }),
+      ]);
 
     return NextResponse.json({
       shipments,
@@ -63,6 +75,11 @@ export async function GET(req: Request) {
       limit,
       offset,
       pages: Math.ceil(total / limit),
+      stats: {
+        pending: pendingCount,
+        delivered: deliveredCount,
+        inTransit: inTransitCount,
+      },
     });
   } catch (error) {
     console.error("Shipments API GET error:", error);
@@ -80,38 +97,40 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    // Simplistic Create for now
     const shipment = await prisma.transit_shipments.create({
       data: {
-        shipping_date: body.shipping_date
-          ? new Date(body.shipping_date)
-          : undefined,
-        arrival_date: body.arrival_date
-          ? new Date(body.arrival_date)
-          : undefined,
-        status: body.status || "قيد الانتظار",
-        shipping_company: body.shipping_company, // Int (Foreign Key)
-        shipment_number: body.shipment_number,
-        container_number: body.container_number,
-        quantity: body.quantity,
-        weight: body.weight,
-        company_name: body.company_name, // Int (Foreign Key)
-        goods_description: body.goods_description,
-        invoice_number: body.invoice_number,
-        invoice_date: body.invoice_date
-          ? new Date(body.invoice_date)
-          : undefined,
-        origin: body.origin,
-        port: body.port, // Int (Foreign Key)
-        crossing_point: body.crossing_point, // Int (Foreign Key)
+        shipment_number: body.shipment_number || null,
+        bl_number: body.bl_number || null,
+        shipping_company: body.shipping_company
+          ? parseInt(body.shipping_company)
+          : null,
+        sender_company_id: body.sender_company_id
+          ? parseInt(body.sender_company_id)
+          : null,
+        port_of_loading: body.port_of_loading
+          ? parseInt(body.port_of_loading)
+          : null,
+        port_of_discharge: body.port_of_discharge
+          ? parseInt(body.port_of_discharge)
+          : null,
+        total_containers: body.total_containers
+          ? parseInt(body.total_containers)
+          : 0,
+        containers_numbers: body.containers_numbers || null,
+        total_gross_weight: body.total_gross_weight
+          ? parseFloat(body.total_gross_weight)
+          : null,
+        arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,
+        status: body.status || "PENDING",
+        isActive: body.isActive !== undefined ? body.isActive : true,
       },
     });
 
     return NextResponse.json(shipment);
-  } catch (error) {
-    console.error("Shipments API POST error:", error);
+  } catch (err) {
+    console.error("Shipments API POST error:", err);
     return NextResponse.json(
-      { error: "Error creating shipment" },
+      { error: "Error creating shipment: " + (err as Error).message },
       { status: 500 },
     );
   }

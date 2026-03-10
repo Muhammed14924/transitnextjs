@@ -64,41 +64,6 @@ const barData = [
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#6366f1"];
 
-const recentShipments = [
-  {
-    id: "SHP-001",
-    customer: "شركة النور للتجارة",
-    item: "معدات بناء ثقيلة",
-    status: "في الطريق",
-    date: "2024-03-24",
-    amount: "15,400 ر.س",
-  },
-  {
-    id: "SHP-002",
-    customer: "مؤسسة الخليج الدولية",
-    item: "أجهزة كهربائية منزلية",
-    status: "تم التوصيل",
-    date: "2024-03-23",
-    amount: "8,250 ر.س",
-  },
-  {
-    id: "SHP-003",
-    customer: "مصنع الرياض للبلاستيك",
-    item: "مواد خام صناعية",
-    status: "معلق",
-    date: "2024-03-22",
-    amount: "22,100 ر.س",
-  },
-  {
-    id: "SHP-004",
-    customer: "أسواق النهضة الغذائية",
-    item: "مواد غذائية مجمدة",
-    status: "في الطريق",
-    date: "2024-03-21",
-    amount: "12,800 ر.س",
-  },
-];
-
 import { useEffect, useState } from "react";
 import { apiClient } from "@/app/lib/api-client";
 
@@ -382,65 +347,81 @@ export default function DashboardPage() {
             </TableHeader>
             <TableBody>
               {recentShipmentsData.length > 0 ? (
-                recentShipmentsData.map((shipment) => (
-                  <TableRow
-                    key={shipment.id}
-                    className="cursor-pointer hover:bg-slate-50/80 transition-colors border-slate-50"
-                  >
-                    <TableCell className="font-semibold text-primary">
-                      SHP-{shipment.id}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-7 w-7">
-                          <AvatarFallback className="text-[10px] bg-slate-100">
-                            {shipment.companies?.company_name?.[0] || "C"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">
-                          {shipment.companies?.company_name || "N/A"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-500 text-sm">
-                      {shipment.goods_description || "N/A"}
-                    </TableCell>
-                    <TableCell className="text-slate-500 text-sm">
-                      {shipment.shipping_date
-                        ? new Date(shipment.shipping_date).toLocaleDateString(
-                            "ar-SA",
-                          )
-                        : "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={cn(
-                          "rounded-full font-medium px-2 py-0 h-6 border-none",
-                          shipment.status === "في الطريق"
-                            ? "bg-blue-50 text-blue-600"
-                            : shipment.status === "تم التوصيل"
-                              ? "bg-emerald-50 text-emerald-600"
-                              : "bg-amber-50 text-amber-600",
-                        )}
-                      >
-                        <div
+                recentShipmentsData.map((shipment: any) => {
+                  const statusMap: Record<string, string> = {
+                    PENDING: "قيد الانتظار",
+                    IN_TRANSIT: "في الطريق",
+                    ARRIVED: "وصلت",
+                    DELIVERED: "تم الاستلام",
+                  };
+                  const statusLabel =
+                    statusMap[shipment.status] || shipment.status;
+                  return (
+                    <TableRow
+                      key={shipment.id}
+                      className="cursor-pointer hover:bg-slate-50/80 transition-colors border-slate-50"
+                    >
+                      <TableCell className="font-semibold text-primary">
+                        {shipment.shipment_number || `SH-${shipment.id}`}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback className="text-[10px] bg-slate-100">
+                              {shipment.sender_company?.company_name?.[0] ||
+                                "C"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">
+                            {shipment.sender_company?.company_name ||
+                              "غير محدد"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-slate-500 text-sm">
+                        {shipment.bl_number || "---"}
+                      </TableCell>
+                      <TableCell className="text-slate-500 text-sm">
+                        {shipment.createdAt
+                          ? new Date(shipment.createdAt).toLocaleDateString(
+                              "ar-SA",
+                            )
+                          : "---"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
                           className={cn(
-                            "w-1.5 h-1.5 rounded-full ml-1.5",
-                            shipment.status === "في الطريق"
-                              ? "bg-blue-600"
-                              : shipment.status === "تم التوصيل"
-                                ? "bg-emerald-600"
-                                : "bg-amber-600",
+                            "rounded-full font-medium px-2 py-0 h-6 border-none",
+                            shipment.status === "IN_TRANSIT" ||
+                              shipment.status === "ARRIVED"
+                              ? "bg-blue-50 text-blue-600"
+                              : shipment.status === "DELIVERED"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-amber-50 text-amber-600",
                           )}
-                        ></div>
-                        {shipment.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-left font-bold">
-                      {shipment.weight ? `${shipment.weight} كجم` : "N/A"}
-                    </TableCell>
-                  </TableRow>
-                ))
+                        >
+                          <div
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full ml-1.5",
+                              shipment.status === "IN_TRANSIT" ||
+                                shipment.status === "ARRIVED"
+                                ? "bg-blue-600"
+                                : shipment.status === "DELIVERED"
+                                  ? "bg-emerald-600"
+                                  : "bg-amber-600",
+                            )}
+                          ></div>
+                          {statusLabel}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-left font-bold">
+                        {shipment.total_gross_weight
+                          ? `${shipment.total_gross_weight} طن`
+                          : "---"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
                   <TableCell

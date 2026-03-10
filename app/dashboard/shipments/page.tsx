@@ -5,20 +5,20 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import {
   Plus,
   Search,
-  Filter,
-  Download,
-  MoreVertical,
-  Eye,
-  Edit,
-  Trash2,
   CheckCircle2,
   Clock,
   Truck,
-  Calendar,
   Layers,
   AlertTriangle,
-  PackageCheck,
+  FileText,
   MapPin,
+  Anchor,
+  Scale,
+  Activity,
+  Upload,
+  Edit,
+  Trash2,
+  Ship,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
@@ -33,74 +33,128 @@ import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/app/components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/lib/utils";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
+// ===================== Types =====================
+interface ShipmentCompany {
+  id: number;
+  company_name?: string;
+}
+interface Port {
+  id: number;
+  port_name: string;
+  country?: string;
+  city?: string;
+}
+interface ShippingComp {
+  id: number;
+  ship_comp: string;
+}
+interface ShipmentDoc {
+  id: number;
+  file_name: string;
+  file_url: string;
+  document_type: string;
+  document_number?: string;
+  createdAt: string;
+}
 interface Shipment {
   id: number;
-  shipment_number: string;
-  container_number?: string;
-  goods_description?: string;
+  shipment_number?: string;
+  bl_number?: string;
   status: string;
-  shipping_date?: string;
-  origin?: string;
-  weight?: number;
-  quantity?: number;
-  companies?: { company_name: string };
-  company_name?: number;
+  isActive?: boolean;
+  shipping_company?: number;
+  sender_company_id?: number;
+  port_of_loading?: number;
+  port_of_discharge?: number;
+  total_containers?: number;
+  containers_numbers?: string;
+  total_gross_weight?: number;
+  arrival_date?: string;
+  createdAt: string;
+  sender_company?: { company_name: string };
+  loading_port?: { port_name: string; country?: string };
+  discharge_port?: { port_name: string; city?: string };
+  shipment_comp?: { ship_comp: string };
+  documents?: { id: number }[];
 }
 
+// ===================== Document types list =====================
+const DOCUMENT_TYPES = [
+  { value: "BL", label: "بوليصة الشحن (BL)" },
+  { value: "INVOICE", label: "فاتورة تجارية" },
+  { value: "PACKING_LIST", label: "قائمة التعبئة" },
+  { value: "CUSTOMS_DEC", label: "بيان جمركي" },
+  { value: "CERTIFICATE", label: "شهادة منشأ" },
+  { value: "INSURANCE", label: "وثيقة تأمين" },
+  { value: "OTHER", label: "أخرى" },
+];
+
+// ===================== Main Page =====================
 export default function ShipmentsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "ADMIN" || user?.role === "MANAGER";
+
   const [shipmentsData, setShipmentsData] = useState<Shipment[]>([]);
   const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({
+    pending: 0,
+    delivered: 0,
+    inTransit: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDocsDialogOpen, setIsDocsDialogOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(
     null,
   );
 
-  const [companies, setCompanies] = useState<any[]>([]);
+  // Master Data
+  const [companies, setCompanies] = useState<ShipmentCompany[]>([]);
+  const [ports, setPorts] = useState<Port[]>([]);
+  const [shippingComps, setShippingComps] = useState<ShippingComp[]>([]);
 
   const [formData, setFormData] = useState({
     shipment_number: "",
-    container_number: "",
-    goods_description: "",
-    status: "في الطريق",
-    company_name: "",
-    weight: 0,
-    quantity: 0,
-    origin: "",
+    bl_number: "",
+    status: "PENDING",
+    shipping_company: "",
+    sender_company_id: "",
+    port_of_loading: "",
+    port_of_discharge: "",
+    total_containers: 0,
+    total_gross_weight: 0,
+    containers_numbers: "",
+    arrival_date: "",
+    isActive: true,
   });
 
+  // ===================== Fetch Data =====================
   const fetchShipments = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getShipments({ limit: 10, q: searchTerm });
+      const data = await apiClient.getShipments({ limit: 50, q: searchTerm });
       if (data) {
-        setShipmentsData(data.shipments);
-        setTotal(data.total);
+        setShipmentsData(data.shipments || []);
+        setTotal(data.total || 0);
+        if (data.stats) {
+          setStats(data.stats);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch shipments", error);
@@ -110,24 +164,44 @@ export default function ShipmentsPage() {
     }
   }, [searchTerm]);
 
-  const fetchCompanies = async () => {
-    const data = await apiClient.getCompanies();
-    if (data) setCompanies(data);
+  const fetchMasterData = async () => {
+    try {
+      const [comps, pts, shipComps] = await Promise.all([
+        apiClient.getCompanies(),
+        apiClient.getPorts(),
+        apiClient.getShippingCompanies(),
+      ]);
+      if (comps) setCompanies(Array.isArray(comps) ? comps : []);
+      if (pts) setPorts(Array.isArray(pts) ? pts : []);
+      if (shipComps)
+        setShippingComps(Array.isArray(shipComps) ? shipComps : []);
+    } catch (e) {
+      console.error("Master data fetch error", e);
+    }
   };
 
   useEffect(() => {
     fetchShipments();
-    fetchCompanies();
+    fetchMasterData();
   }, [fetchShipments]);
 
+  // ===================== CRUD Handlers =====================
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await apiClient.createShipment({
-        ...formData,
-        company_name: parseInt(formData.company_name),
-        weight: Number(formData.weight),
-        quantity: Number(formData.quantity),
+        shipment_number: formData.shipment_number || undefined,
+        bl_number: formData.bl_number || undefined,
+        status: formData.status,
+        shipping_company: formData.shipping_company || undefined,
+        sender_company_id: formData.sender_company_id || undefined,
+        port_of_loading: formData.port_of_loading || undefined,
+        port_of_discharge: formData.port_of_discharge || undefined,
+        total_containers: Number(formData.total_containers),
+        total_gross_weight: Number(formData.total_gross_weight),
+        containers_numbers: formData.containers_numbers || undefined,
+        arrival_date: formData.arrival_date || undefined,
+        isActive: formData.isActive,
       });
       setIsAddDialogOpen(false);
       resetForm();
@@ -135,7 +209,7 @@ export default function ShipmentsPage() {
       toast.success("تم تسجيل الشحنة بنجاح");
     } catch (error) {
       console.error("Error creating shipment", error);
-      toast.error("حدث خطأ أثناء الإضافة");
+      toast.error("حدث خطأ أثناء الإضافة: " + (error as Error).message);
     }
   };
 
@@ -144,10 +218,18 @@ export default function ShipmentsPage() {
     if (!selectedShipment) return;
     try {
       await apiClient.updateShipment(selectedShipment.id, {
-        ...formData,
-        company_name: parseInt(formData.company_name),
-        weight: Number(formData.weight),
-        quantity: Number(formData.quantity),
+        shipment_number: formData.shipment_number || undefined,
+        bl_number: formData.bl_number || undefined,
+        status: formData.status,
+        shipping_company: formData.shipping_company || undefined,
+        sender_company_id: formData.sender_company_id || undefined,
+        port_of_loading: formData.port_of_loading || undefined,
+        port_of_discharge: formData.port_of_discharge || undefined,
+        total_containers: Number(formData.total_containers),
+        total_gross_weight: Number(formData.total_gross_weight),
+        containers_numbers: formData.containers_numbers || undefined,
+        arrival_date: formData.arrival_date || undefined,
+        isActive: formData.isActive,
       });
       setIsEditDialogOpen(false);
       resetForm();
@@ -155,7 +237,7 @@ export default function ShipmentsPage() {
       toast.success("تم تحديث بيانات الشحنة");
     } catch (error) {
       console.error("Error updating shipment", error);
-      toast.error("حدث خطأ أثناء التحديث");
+      toast.error("حدث خطأ أثناء التحديث: " + (error as Error).message);
     }
   };
 
@@ -169,7 +251,7 @@ export default function ShipmentsPage() {
       toast.success("تم حذف الشحنة بنجاح");
     } catch (error) {
       console.error("Error deleting shipment", error);
-      toast.error("حدث خطأ أثناء الحذف");
+      toast.error("حدث خطأ أثناء الحذف: " + (error as Error).message);
     }
   };
 
@@ -177,444 +259,296 @@ export default function ShipmentsPage() {
     setSelectedShipment(shipment);
     setFormData({
       shipment_number: shipment.shipment_number || "",
-      container_number: shipment.container_number || "",
-      goods_description: shipment.goods_description || "",
-      status: shipment.status || "في الطريق",
-      company_name: (shipment.company_name || "").toString(),
-      weight: shipment.weight || 0,
-      quantity: shipment.quantity || 0,
-      origin: shipment.origin || "",
+      bl_number: shipment.bl_number || "",
+      status: shipment.status || "PENDING",
+      shipping_company: (shipment.shipping_company || "").toString(),
+      sender_company_id: (shipment.sender_company_id || "").toString(),
+      port_of_loading: (shipment.port_of_loading || "").toString(),
+      port_of_discharge: (shipment.port_of_discharge || "").toString(),
+      total_containers: shipment.total_containers || 0,
+      total_gross_weight: shipment.total_gross_weight || 0,
+      containers_numbers: shipment.containers_numbers || "",
+      arrival_date: shipment.arrival_date
+        ? new Date(shipment.arrival_date).toISOString().split("T")[0]
+        : "",
+      isActive: shipment.isActive !== false,
     });
     setIsEditDialogOpen(true);
-  };
-
-  const openDeleteDialog = (shipment: Shipment) => {
-    setSelectedShipment(shipment);
-    setIsDeleteDialogOpen(true);
   };
 
   const resetForm = () => {
     setFormData({
       shipment_number: "",
-      container_number: "",
-      goods_description: "",
-      status: "في الطريق",
-      company_name: "",
-      weight: 0,
-      quantity: 0,
-      origin: "",
+      bl_number: "",
+      status: "PENDING",
+      shipping_company: "",
+      sender_company_id: "",
+      port_of_loading: "",
+      port_of_discharge: "",
+      total_containers: 0,
+      total_gross_weight: 0,
+      containers_numbers: "",
+      arrival_date: "",
+      isActive: true,
     });
     setSelectedShipment(null);
   };
 
+  const statusLabel = (s: string) => {
+    const map: Record<string, string> = {
+      PENDING: "قيد الانتظار",
+      IN_TRANSIT: "في الطريق",
+      ARRIVED: "وصلت",
+      DELIVERED: "تم الاستلام",
+    };
+    return map[s] || s;
+  };
+
+  // ===================== UI =====================
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            إدارة الشحنات
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Truck className="text-primary" /> إدارة شحنات الترانزيت
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            تتبع وإدارة جميع الشحنات وعمليات النقل النشطة في الوقت الحقيقي.
+            متابعة البوالص، الحاويات، والمستندات الجمركية للشحنات الصادرة
+            والواردة.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="rounded-xl h-10 gap-2 border-slate-200 text-slate-600 bg-white hover:bg-slate-50 font-medium"
-          >
-            <Download size={16} />
-            تصدير PDF
-          </Button>
           {canWrite && (
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all px-6">
-                <Plus size={16} />
-                إضافة شحنة جديدة
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] rounded-2xl p-8">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold text-right text-slate-900">
-                  إضافة شحنة جديدة
-                </DialogTitle>
-                <DialogDescription className="text-right text-slate-500">
-                  أدخل تفاصيل الشحنة الجديدة ليتم تسجيلها وجدولتها في النظام.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreate}>
-                <div className="grid grid-cols-2 gap-5 py-6 rtl text-right">
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="shipment_number"
-                      className="font-bold text-slate-700"
-                    >
-                      رقم الشحنة
-                    </Label>
-                    <Input
-                      id="shipment_number"
-                      value={formData.shipment_number}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          shipment_number: e.target.value,
-                        })
-                      }
-                      className="rounded-xl h-11 bg-slate-50 border-slate-100 font-medium"
-                      placeholder="SHP-2024-XXX"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="container_number"
-                      className="font-bold text-slate-700"
-                    >
-                      رقم الحاوية
-                    </Label>
-                    <Input
-                      id="container_number"
-                      value={formData.container_number}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          container_number: e.target.value,
-                        })
-                      }
-                      className="rounded-xl h-11 bg-slate-50 border-slate-100 font-medium"
-                      placeholder="CONT-XXXXXX"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="comp_id"
-                      className="font-bold text-slate-700"
-                    >
-                      الشركة المالكة
-                    </Label>
-                    <select
-                      id="comp_id"
-                      value={formData.company_name}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          company_name: e.target.value,
-                        })
-                      }
-                      className="w-full h-11 rounded-xl border border-slate-100 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium text-slate-900"
-                      required
-                    >
-                      <option value="">اختر الشركة...</option>
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.company_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="status"
-                      className="font-bold text-slate-700"
-                    >
-                      حالة الشحنة
-                    </Label>
-                    <select
-                      id="status"
-                      value={formData.status}
-                      onChange={(e) =>
-                        setFormData({ ...formData, status: e.target.value })
-                      }
-                      className="w-full h-11 rounded-xl border border-slate-100 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium text-slate-900"
-                    >
-                      <option value="في الطريق">في الطريق</option>
-                      <option value="تم التوصيل">تم التوصيل</option>
-                      <option value="معلق">معلق</option>
-                      <option value="قيد المعالجة">قيد المعالجة</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="origin"
-                      className="font-bold text-slate-700"
-                    >
-                      المنشأ
-                    </Label>
-                    <Input
-                      id="origin"
-                      value={formData.origin}
-                      onChange={(e) =>
-                        setFormData({ ...formData, origin: e.target.value })
-                      }
-                      className="rounded-xl h-11 bg-slate-50 border-slate-100"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="qty" className="font-bold text-slate-700">
-                        الكمية
-                      </Label>
-                      <Input
-                        id="qty"
-                        type="number"
-                        value={formData.quantity}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            quantity: Number(e.target.value),
-                          })
-                        }
-                        className="h-11 rounded-xl bg-slate-50"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label
-                        htmlFor="weight"
-                        className="font-bold text-slate-700"
-                      >
-                        الوزن
-                      </Label>
-                      <Input
-                        id="weight"
-                        type="number"
-                        value={formData.weight}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            weight: Number(e.target.value),
-                          })
-                        }
-                        className="h-11 rounded-xl bg-slate-50"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-span-2 space-y-1.5">
-                    <Label htmlFor="desc" className="font-bold text-slate-700">
-                      وصف البضائع
-                    </Label>
-                    <Input
-                      id="desc"
-                      value={formData.goods_description}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          goods_description: e.target.value,
-                        })
-                      }
-                      className="rounded-xl h-11 bg-slate-50 border-slate-100"
-                    />
-                  </div>
-                </div>
-                <DialogFooter className="flex-row-reverse sm:justify-start gap-3 pt-4 border-t border-slate-50">
-                  <Button
-                    type="submit"
-                    className="rounded-xl px-12 h-12 font-bold bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
-                  >
-                    تسجيل الشحنة
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    type="button"
-                    onClick={() => setIsAddDialogOpen(false)}
-                    className="rounded-xl h-12 px-8 font-bold text-slate-400"
-                  >
-                    إلغاء
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+            <Button
+              onClick={() => {
+                resetForm();
+                setIsAddDialogOpen(true);
+              }}
+              className="rounded-xl h-10 gap-2 bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all px-6 font-bold"
+            >
+              <Plus size={16} />
+              إضافة شحنة جديدة
+            </Button>
           )}
         </div>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <MiniStatsCard
-          title="نشط حالياً"
+          title="إجمالي الشحنات"
           value={loading ? "..." : total.toString()}
-          detail="إجمالي الشحنات"
+          icon={<Activity size={18} />}
           color="blue"
-          icon={<Truck size={18} />}
-        />
-        <MiniStatsCard
-          title="تم التسليم"
-          value="45"
-          detail="خلال الـ 30 يوماً الماضية"
-          color="emerald"
-          icon={<CheckCircle2 size={18} />}
+          detail="جميع الشحنات المسجلة"
         />
         <MiniStatsCard
           title="قيد الانتظار"
-          value="12"
-          detail="تحتاج إجراء"
-          color="amber"
+          value={loading ? "..." : stats.pending.toString()}
           icon={<Clock size={18} />}
+          color="amber"
+          detail="تحتاج معالجة"
         />
         <MiniStatsCard
-          title="بوابات نشطة"
-          value="5"
-          detail="تحديث مباشر"
+          title="مكتملة"
+          value={loading ? "..." : stats.delivered.toString()}
+          icon={<CheckCircle2 size={18} />}
+          color="emerald"
+          detail="تم التخليص والاستلام"
+        />
+        <MiniStatsCard
+          title="في الطريق / وصلت"
+          value={loading ? "..." : stats.inTransit.toString()}
+          icon={<Anchor size={18} />}
           color="indigo"
-          icon={<MapPin size={18} />}
+          detail="في الموانئ أو بالطريق"
         />
       </div>
 
-      <Card className="border-slate-100 shadow-xl shadow-slate-200/50 rounded-[28px] overflow-hidden hover:shadow-2xl transition-all duration-500 bg-white border-none">
-        <CardHeader className="bg-white border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 py-10 px-8">
+      {/* Table */}
+      <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[28px] overflow-hidden bg-white">
+        <CardHeader className="bg-white border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 py-6 px-8">
           <div className="relative w-full md:w-[450px] group">
             <Search
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors"
-              size={20}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+              size={18}
             />
             <Input
-              placeholder="ابحث برقم الشحنة، الحاوية، أو الشركة..."
-              className="pr-12 bg-slate-50 border-slate-100 focus:bg-white focus:border-primary/20 focus-visible:ring-primary/5 rounded-[20px] h-12 text-sm font-medium transition-all"
+              placeholder="ابحث برقم الشحنة، BL، أو اسم المصدر..."
+              className="pr-12 bg-slate-50 border-none rounded-2xl h-12 text-sm font-medium focus-visible:ring-primary/20"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => fetchShipments()}
-              className="h-12 rounded-[20px] gap-2 border-slate-100 text-slate-600 bg-white hover:bg-slate-50 font-bold px-6 shadow-sm"
-            >
-              تحديث البيانات
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            onClick={fetchShipments}
+            className="rounded-xl h-11 border-slate-100 font-bold px-6"
+          >
+            تحديث
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-slate-50/50">
-              <TableRow className="border-slate-50 h-14">
-                <TableHead className="text-right font-black text-slate-400 text-xs px-8 uppercase tracking-widest">
-                  المعرف / التتبع
+              <TableRow className="border-slate-50">
+                <TableHead className="text-right font-black text-slate-400 text-xs px-8 h-14 uppercase">
+                  رقم الشحنة / BL
                 </TableHead>
-                <TableHead className="text-right font-black text-slate-400 text-xs px-4 uppercase tracking-widest">
-                  العميل / الشركة
+                <TableHead className="text-right font-black text-slate-400 text-xs px-4 h-14 uppercase">
+                  المرسل / الناقل
                 </TableHead>
-                <TableHead className="text-right font-black text-slate-400 text-xs px-4 uppercase tracking-widest">
-                  المسار والبيانات
+                <TableHead className="text-right font-black text-slate-400 text-xs px-4 h-14 uppercase">
+                  المسار (من → إلى)
                 </TableHead>
-                <TableHead className="text-right font-black text-slate-400 text-xs px-4 uppercase tracking-widest text-center">
-                  التاريخ والحالة
+                <TableHead className="text-center font-black text-slate-400 text-xs px-4 h-14 uppercase">
+                  الحالة / البيانات
                 </TableHead>
-                <TableHead className="text-center font-black text-slate-400 text-xs px-8 uppercase tracking-widest">
+                <TableHead className="text-center font-black text-slate-400 text-xs px-8 h-14 uppercase">
                   الإجراءات
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {shipmentsData.length > 0 ? (
-                shipmentsData.map((shipment) => (
+                shipmentsData.map((s) => (
                   <TableRow
-                    key={shipment.id}
-                    className="hover:bg-slate-50/40 transition-all border-slate-50 h-[92px] group"
+                    key={s.id}
+                    className="hover:bg-slate-50/40 border-slate-50 group"
                   >
-                    <TableCell className="px-8">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-black text-primary text-sm tracking-tight">
-                          {shipment.shipment_number || `ID-${shipment.id}`}
+                    <TableCell className="px-8 py-4">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-black text-primary text-sm">
+                          {s.shipment_number || `SH-${s.id}`}
                         </span>
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
-                          <Layers size={11} className="text-slate-300" />
-                          <span>
-                            {shipment.container_number || "حاوية مفقودة"}
+                        {s.bl_number && (
+                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                            <FileText size={10} /> BL: {s.bl_number}
                           </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-xs text-slate-400">
-                          {shipment.companies?.company_name?.[0] || "C"}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 text-sm truncate max-w-[180px]">
-                            {shipment.companies?.company_name || "غير محدد"}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            العميل المالك
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
-                          <MapPin size={12} className="text-primary" />
-                          <span>{shipment.origin || "الميناء الرئيسي"}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">
-                          {shipment.goods_description || "لا يوجد وصف للمواد"}
+                        )}
+                        <span className="text-[9px] text-slate-300 mt-1">
+                          {new Date(s.createdAt).toLocaleDateString("ar-SA")}
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4">
+                    <TableCell className="px-4 py-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center font-bold text-slate-400 text-[10px]">
+                            {s.sender_company?.company_name?.[0] || "?"}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-800 text-xs">
+                              {s.sender_company?.company_name || "---"}
+                            </span>
+                            <span className="text-[9px] text-slate-400">
+                              المرسل
+                            </span>
+                          </div>
+                        </div>
+                        {s.shipment_comp?.ship_comp && (
+                          <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-1">
+                            <Ship size={10} className="text-blue-400" />
+                            <span>{s.shipment_comp.ship_comp}</span>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
+                          <Anchor
+                            size={11}
+                            className="text-blue-500 shrink-0"
+                          />
+                          <span>{s.loading_port?.port_name || "---"}</span>
+                          <span className="text-slate-300 mx-0.5">→</span>
+                          <MapPin
+                            size={11}
+                            className="text-rose-500 shrink-0"
+                          />
+                          <span>{s.discharge_port?.port_name || "---"}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">
+                          وصول:{" "}
+                          {s.arrival_date
+                            ? new Date(s.arrival_date).toLocaleDateString(
+                                "ar-SA",
+                              )
+                            : "---"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <Badge
                           className={cn(
-                            "rounded-full font-black text-[10px] px-3 py-1 border-none shadow-sm",
-                            shipment.status === "تم التوصيل"
+                            "rounded-full px-3 py-0.5 text-[10px] font-bold border-none",
+                            s.status === "DELIVERED"
                               ? "bg-emerald-50 text-emerald-600"
-                              : "bg-blue-50 text-blue-600",
+                              : s.status === "PENDING"
+                                ? "bg-amber-50 text-amber-600"
+                                : s.status === "ARRIVED"
+                                  ? "bg-violet-50 text-violet-600"
+                                  : "bg-blue-50 text-blue-600",
                           )}
                         >
-                          {shipment.status}
+                          {statusLabel(s.status)}
                         </Badge>
-                        <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
-                          <Calendar size={10} />
-                          {shipment.shipping_date
-                            ? new Date(
-                                shipment.shipping_date,
-                              ).toLocaleDateString("ar-SA")
-                            : "غير مقرر"}
-                        </span>
+                        <div className="flex gap-3 text-[10px] font-bold text-slate-400">
+                          <span className="flex items-center gap-0.5">
+                            <Layers size={10} /> {s.total_containers || 0} حاوية
+                          </span>
+                          <span className="flex items-center gap-0.5">
+                            <Scale size={10} /> {s.total_gross_weight || 0} T
+                          </span>
+                        </div>
+                        {s.documents && s.documents.length > 0 && (
+                          <span className="text-[9px] text-indigo-500 font-bold">
+                            {s.documents.length} مستند
+                          </span>
+                        )}
                       </div>
                     </TableCell>
-                    <TableCell className="px-8">
-                      <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <TableCell className="px-8 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-10 w-10 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-2xl"
+                          onClick={() => {
+                            setSelectedShipment(s);
+                            setIsDocsDialogOpen(true);
+                          }}
+                          className="h-9 w-9 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                          title="المستندات"
                         >
-                          <Eye size={18} />
+                          <FileText size={16} />
                         </Button>
                         {canWrite && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEditDialog(shipment)}
-                          className="h-10 w-10 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl"
-                        >
-                          <Edit size={18} />
-                        </Button>
-                        )}
-                        {canWrite && (
-                        <DropdownMenu dir="rtl">
-                          <DropdownMenuTrigger asChild>
+                          <>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-10 w-10 text-slate-400 hover:bg-slate-100 rounded-2xl"
+                              onClick={() => openEditDialog(s)}
+                              className="h-9 w-9 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-xl"
+                              title="تعديل"
                             >
-                              <MoreVertical size={18} />
+                              <Edit size={16} />
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="w-48 rounded-2xl p-2 border-slate-100 shadow-2xl"
-                          >
-                            <DropdownMenuItem
-                              onClick={() => openDeleteDialog(shipment)}
-                              className="p-3 text-sm font-bold text-rose-600 focus:bg-rose-50 rounded-xl gap-3 cursor-pointer"
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedShipment(s);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="h-9 w-9 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
+                              title="حذف"
                             >
-                              <Trash2 size={16} /> حذف الشحنة
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <Trash2 size={16} />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -626,7 +560,9 @@ export default function ShipmentsPage() {
                     colSpan={5}
                     className="text-center py-20 text-slate-300 font-bold italic"
                   >
-                    {loading ? "جاري جرد الشحنات..." : "لا توجد شحنات في السجل"}
+                    {loading
+                      ? "جاري جلب البيانات..."
+                      : "لا توجد شحنات مسجلة حالياً"}
                   </TableCell>
                 </TableRow>
               )}
@@ -635,21 +571,42 @@ export default function ShipmentsPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] rounded-2xl p-8">
+      {/* ==================== Add/Edit Dialog ==================== */}
+      <Dialog
+        open={isAddDialogOpen || isEditDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAddDialogOpen(false);
+            setIsEditDialogOpen(false);
+            resetForm();
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-[750px] rounded-3xl p-8 max-h-[90vh] overflow-y-auto"
+          dir="rtl"
+        >
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-right text-slate-900">
-              تعديل بيانات الشحنة
+            <DialogTitle className="text-2xl font-black text-slate-900 text-right">
+              {isEditDialogOpen
+                ? "✏️ تعديل بيانات الشحنة"
+                : "📦 تسجيل شحنة ترانزيت جديدة"}
             </DialogTitle>
-            <DialogDescription className="text-right text-slate-500">
-              قم بتعديل المعلومات اللازمة واضغط على حفظ التغييرات.
+            <DialogDescription className="text-right font-bold text-slate-400 mt-2">
+              يرجى إدخال جميع تفاصيل البوليصة، الموانئ، الحاويات، وشركة الشحن.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleUpdate}>
-            <div className="grid grid-cols-2 gap-5 py-6 rtl text-right">
-              <div className="space-y-1.5">
-                <Label className="font-bold">رقم الشحنة</Label>
+
+          <form
+            onSubmit={isEditDialogOpen ? handleUpdate : handleCreate}
+            className="space-y-6 pt-4"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* -- Shipment Number -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  رقم الشحنة (داخلي)
+                </Label>
                 <Input
                   value={formData.shipment_number}
                   onChange={(e) =>
@@ -658,48 +615,233 @@ export default function ShipmentsPage() {
                       shipment_number: e.target.value,
                     })
                   }
-                  className="h-11 rounded-xl bg-slate-50"
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
+                  placeholder="مثلاً: TR-2024-001"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="font-bold">الحالة</Label>
+              {/* -- BL Number -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  رقم البوليصة (BL Number)
+                </Label>
+                <Input
+                  value={formData.bl_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, bl_number: e.target.value })
+                  }
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
+                  placeholder="MSCU123456..."
+                />
+              </div>
+              {/* -- Sender Company -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  الشركة المرسلة (Sender)
+                </Label>
+                <select
+                  value={formData.sender_company_id}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      sender_company_id: e.target.value,
+                    })
+                  }
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                >
+                  <option value="">اختر الشركة المرسلة...</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* -- Shipping Company (Carrier) -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  شركة الشحن (Carrier)
+                </Label>
+                <select
+                  value={formData.shipping_company}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      shipping_company: e.target.value,
+                    })
+                  }
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                >
+                  <option value="">اختر شركة الشحن...</option>
+                  {shippingComps.map((sc) => (
+                    <option key={sc.id} value={sc.id}>
+                      {sc.ship_comp}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* -- Port Loading -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  ميناء التحميل (Loading)
+                </Label>
+                <select
+                  value={formData.port_of_loading}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      port_of_loading: e.target.value,
+                    })
+                  }
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                >
+                  <option value="">اختر ميناء التحميل...</option>
+                  {ports.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.port_name}
+                      {p.country ? ` — ${p.country}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* -- Port Discharge -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  ميناء التفريغ (Discharge)
+                </Label>
+                <select
+                  value={formData.port_of_discharge}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      port_of_discharge: e.target.value,
+                    })
+                  }
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                >
+                  <option value="">اختر ميناء التفريغ...</option>
+                  {ports.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.port_name}
+                      {p.city ? ` — ${p.city}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* -- Status -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">الحالة</Label>
                 <select
                   value={formData.status}
                   onChange={(e) =>
                     setFormData({ ...formData, status: e.target.value })
                   }
-                  className="w-full h-11 rounded-xl bg-slate-50 px-3 text-sm font-bold border-slate-100"
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
                 >
-                  <option value="في الطريق">في الطريق</option>
-                  <option value="تم التوصيل">تم التوصيل</option>
-                  <option value="معلق">معلق</option>
+                  <option value="PENDING">⏳ قيد الانتظار (PENDING)</option>
+                  <option value="IN_TRANSIT">🚢 في الطريق (IN TRANSIT)</option>
+                  <option value="ARRIVED">📍 وصلت (ARRIVED)</option>
+                  <option value="DELIVERED">✅ تم الاستلام (DELIVERED)</option>
                 </select>
               </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label className="font-bold">المنتجات / الوصف</Label>
+              {/* -- Arrival Date -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  تاريخ الوصول المتوقع
+                </Label>
                 <Input
-                  value={formData.goods_description}
+                  type="date"
+                  value={formData.arrival_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, arrival_date: e.target.value })
+                  }
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
+                />
+              </div>
+              {/* -- Containers count & Weight -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 px-1 text-xs">
+                  عدد الحاويات
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.total_containers}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      goods_description: e.target.value,
+                      total_containers: Number(e.target.value),
                     })
                   }
-                  className="h-11 rounded-xl bg-slate-50"
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-4"
                 />
               </div>
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 px-1 text-xs">
+                  الوزن الإجمالي (طن)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.total_gross_weight}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      total_gross_weight: Number(e.target.value),
+                    })
+                  }
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-4"
+                />
+              </div>
+              {/* -- Container Numbers (full width) -- */}
+              <div className="col-span-1 md:col-span-2 space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  أرقام الحاويات (Container Numbers)
+                </Label>
+                <textarea
+                  value={formData.containers_numbers}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      containers_numbers: e.target.value,
+                    })
+                  }
+                  className="w-full p-4 rounded-2xl bg-slate-50 border-none text-sm font-medium focus:ring-2 focus:ring-primary/20 min-h-[80px] resize-y"
+                  placeholder="MSKU0012345, MSCU9876543, TCLU4567890..."
+                />
+              </div>
+              {/* isActive */}
+              <div className="col-span-1 md:col-span-2 flex items-center gap-3 text-right">
+                <input
+                  type="checkbox"
+                  checked={formData.isActive}
+                  onChange={(e) =>
+                    setFormData({ ...formData, isActive: e.target.checked })
+                  }
+                  className="h-5 w-5 rounded-lg accent-primary"
+                />
+                <Label className="font-bold text-slate-700">
+                  الشحنة نشطة (isActive)
+                </Label>
+              </div>
             </div>
-            <DialogFooter className="flex-row-reverse gap-3">
+
+            <DialogFooter className="flex-row-reverse gap-3 pt-6 border-t border-slate-100">
               <Button
                 type="submit"
-                className="rounded-xl h-12 px-10 font-bold bg-primary shadow-lg shadow-primary/20"
+                className="rounded-2xl h-14 px-12 font-black bg-primary shadow-xl shadow-primary/10 hover:shadow-primary/30 transition-all text-lg"
               >
-                حفظ التغييرات
+                {isEditDialogOpen ? "💾 حفظ التعديلات" : "✅ تأكيد التسجيل"}
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => setIsEditDialogOpen(false)}
-                className="rounded-xl h-12 font-bold text-slate-400"
+                type="button"
+                onClick={() => {
+                  setIsAddDialogOpen(false);
+                  setIsEditDialogOpen(false);
+                  resetForm();
+                }}
+                className="rounded-2xl h-14 px-8 font-bold text-slate-400 hover:bg-slate-50"
               >
                 إلغاء
               </Button>
@@ -708,81 +850,309 @@ export default function ShipmentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
+      {/* ==================== Delete Confirmation ==================== */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-3xl p-8 border-none shadow-2xl">
-          <DialogHeader>
-            <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-rose-100">
-              <AlertTriangle className="text-rose-600" size={32} />
-            </div>
-            <DialogTitle className="text-center font-black text-slate-900 text-xl">
-              حذف الشحنة
-            </DialogTitle>
-            <DialogDescription className="text-center text-slate-500 font-bold py-4">
-              هل أنت متأكد من حذف الشحنة رقم{" "}
-              <span className="text-slate-900">
-                "{selectedShipment?.shipment_number}"
-              </span>
-              ؟
-              <br /> هذا الإجراء نهائي ولا يمكن استعادته.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-3 mt-4">
+        <DialogContent
+          className="sm:max-w-[400px] rounded-3xl p-8 border-none text-right"
+          dir="rtl"
+        >
+          <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+            <AlertTriangle className="text-rose-600" size={32} />
+          </div>
+          <DialogTitle className="font-black text-slate-900 text-xl">
+            تأكيد الحذف
+          </DialogTitle>
+          <DialogDescription className="font-bold text-slate-500 py-4">
+            هل أنت متأكد من حذف الشحنة{" "}
+            <strong>
+              {selectedShipment?.shipment_number ||
+                `SH-${selectedShipment?.id}`}
+            </strong>
+            ؟ سيتم حذف جميع المستندات المرتبطة. هذا الإجراء لا يمكن التراجع عنه.
+          </DialogDescription>
+          <DialogFooter className="gap-3 mt-4">
             <Button
-              variant="destructive"
               onClick={handleDelete}
-              className="rounded-2xl h-14 w-full sm:flex-1 font-black bg-rose-600 hover:bg-rose-700 shadow-xl shadow-rose-100"
+              className="rounded-2xl h-12 flex-1 bg-rose-600 font-bold hover:bg-rose-700 transition-colors"
             >
-              نعم، حذف نهائي
+              نعم، احذف
             </Button>
             <Button
               variant="outline"
               onClick={() => setIsDeleteDialogOpen(false)}
-              className="rounded-2xl h-14 w-full sm:flex-1 font-bold text-slate-500 border-slate-100 bg-slate-50/50"
+              className="rounded-2xl h-12 flex-1 font-bold"
             >
               تراجع
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ==================== Documents Dialog ==================== */}
+      <DocumentsDialog
+        open={isDocsDialogOpen}
+        onOpenChange={setIsDocsDialogOpen}
+        shipment={selectedShipment}
+      />
     </div>
   );
 }
 
-function MiniStatsCard({ title, value, detail, color, icon }: any) {
-  const themes: any = {
-    blue: "bg-blue-50/50 text-blue-600 border-blue-100 shadow-blue-100/20",
-    emerald:
-      "bg-emerald-50/50 text-emerald-600 border-emerald-100 shadow-emerald-100/20",
-    amber: "bg-amber-50/50 text-amber-600 border-amber-100 shadow-amber-100/20",
-    indigo:
-      "bg-indigo-50/50 text-indigo-600 border-indigo-100 shadow-indigo-100/20",
+// ===================== Documents Dialog Component =====================
+function DocumentsDialog({
+  open,
+  onOpenChange,
+  shipment,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  shipment: Shipment | null;
+}) {
+  const [docs, setDocs] = useState<ShipmentDoc[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [docType, setDocType] = useState("OTHER");
+  const [docNumber, setDocNumber] = useState("");
+
+  const fetchDocs = useCallback(async () => {
+    if (!shipment) return;
+    setLoading(true);
+    try {
+      const data = await apiClient.getShipmentDocuments(shipment.id);
+      if (data) setDocs(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error("فشل تحميل المستندات");
+    } finally {
+      setLoading(false);
+    }
+  }, [shipment]);
+
+  useEffect(() => {
+    if (open && shipment) {
+      fetchDocs();
+      setDocType("OTHER");
+      setDocNumber("");
+    }
+  }, [open, fetchDocs, shipment]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !shipment) return;
+
+    setUploading(true);
+    try {
+      const uploadRes = await apiClient.uploadToS3(file);
+      if (uploadRes && uploadRes.fileUrl) {
+        await apiClient.createShipmentDocument(shipment.id, {
+          document_type: docType,
+          document_number: docNumber || null,
+          file_url: uploadRes.fileUrl,
+          file_name: file.name,
+        });
+        toast.success("تم رفع المستند بنجاح ✅");
+        fetchDocs();
+        setDocNumber("");
+      }
+    } catch {
+      toast.error("فشل رفع الملف — تأكد من اتصال S3");
+    } finally {
+      setUploading(false);
+      // Reset file input
+      e.target.value = "";
+    }
+  };
+
+  const docTypeLabel = (val: string) => {
+    const found = DOCUMENT_TYPES.find((d) => d.value === val);
+    return found ? found.label : val;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-[650px] rounded-3xl p-8 max-h-[85vh] overflow-y-auto"
+        dir="rtl"
+      >
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-right flex items-center gap-2">
+            <FileText className="text-primary" size={20} />
+            مستندات الشحنة: {shipment?.shipment_number || `SH-${shipment?.id}`}
+          </DialogTitle>
+          <DialogDescription className="text-right">
+            عرض ورفع المستندات المرفقة بهذه الشحنة (بوليصة، فاتورة، بيان جمركي،
+            إلخ).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-4">
+          {/* Upload Section */}
+          <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-5 rounded-2xl border border-dashed border-slate-200 space-y-4">
+            <p className="text-sm font-black text-slate-700">
+              📎 رفع مستند جديد
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5 text-right">
+                <Label className="text-xs font-bold text-slate-500">
+                  نوع المستند
+                </Label>
+                <select
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value)}
+                  className="w-full h-11 rounded-xl bg-white border border-slate-100 px-4 text-sm font-bold text-slate-700"
+                >
+                  {DOCUMENT_TYPES.map((dt) => (
+                    <option key={dt.value} value={dt.value}>
+                      {dt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5 text-right">
+                <Label className="text-xs font-bold text-slate-500">
+                  رقم المستند (اختياري)
+                </Label>
+                <Input
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  className="rounded-xl h-11 bg-white border-slate-100 px-4"
+                  placeholder="INV-001..."
+                />
+              </div>
+            </div>
+
+            <div className="relative flex items-center justify-center">
+              <input
+                type="file"
+                onChange={handleUpload}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                disabled={uploading}
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+              />
+              <Button
+                disabled={uploading}
+                className="rounded-xl gap-2 font-bold h-12 w-full bg-primary/90 hover:bg-primary transition-colors shadow-md"
+              >
+                {uploading ? (
+                  "⏳ جاري الرفع إلى الخادم..."
+                ) : (
+                  <>
+                    <Upload size={16} /> اختر ملف ورفعه
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Documents List */}
+          <div className="space-y-2">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">
+              المستندات المرفوعة ({docs.length})
+            </p>
+            {loading ? (
+              <p className="text-center text-slate-400 py-8">جاري التحميل...</p>
+            ) : docs.length > 0 ? (
+              docs.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-xl hover:bg-slate-50/50 hover:border-slate-200 transition-all group"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                      <FileText className="text-indigo-500" size={18} />
+                    </div>
+                    <div className="flex flex-col text-right min-w-0">
+                      <span className="text-sm font-bold text-slate-700 truncate block">
+                        {d.file_name}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] py-0 px-1.5 rounded-full font-bold border-slate-200"
+                        >
+                          {docTypeLabel(d.document_type)}
+                        </Badge>
+                        {d.document_number && (
+                          <span className="text-[9px] text-slate-400">
+                            #{d.document_number}
+                          </span>
+                        )}
+                        <span className="text-[9px] text-slate-300">
+                          {new Date(d.createdAt).toLocaleDateString("ar-SA")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className="text-primary font-bold shrink-0 hover:bg-primary/5 rounded-lg"
+                  >
+                    <a href={d.file_url} target="_blank" rel="noreferrer">
+                      عرض ↗
+                    </a>
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12 text-slate-300">
+                <FileText className="mx-auto mb-3 text-slate-200" size={40} />
+                <p className="italic font-bold">
+                  لا توجد مستندات مرفوعة حتى الآن
+                </p>
+                <p className="text-[11px] mt-1">
+                  استخدم النموذج أعلاه لرفع أول مستند
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ===================== Stats Card Component =====================
+function MiniStatsCard({
+  title,
+  value,
+  detail,
+  color,
+  icon,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  color: string;
+  icon: React.ReactNode;
+}) {
+  const colors: Record<string, string> = {
+    blue: "bg-blue-50/50 text-blue-600 border-blue-100",
+    emerald: "bg-emerald-50/50 text-emerald-600 border-emerald-100",
+    amber: "bg-amber-50/50 text-amber-600 border-amber-100",
+    indigo: "bg-indigo-50/50 text-indigo-600 border-indigo-100",
   };
 
   return (
     <div
       className={cn(
-        "p-6 rounded-[24px] border border-slate-100 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-500 bg-white group",
-        themes[color],
+        "p-6 rounded-[24px] border border-slate-100 bg-white hover:shadow-xl transition-all group",
+        colors[color],
       )}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex justify-between items-center mb-4">
         <span className="text-[10px] font-black uppercase tracking-widest opacity-60">
           {title}
         </span>
-        <div className="p-2 rounded-xl bg-white shadow-sm border border-slate-50 group-hover:rotate-12 transition-transform duration-500">
+        <div className="p-2 rounded-xl bg-white shadow-sm group-hover:rotate-12 transition-transform">
           {icon}
         </div>
       </div>
-      <div className="flex flex-col">
-        <span className="text-3xl font-black text-slate-900 leading-none tracking-tight tabular-nums">
-          {value}
-        </span>
-        <span className="text-[10px] text-slate-400 font-bold mt-2 flex items-center gap-1.5 px-0.5">
-          <div className="w-1 h-1 rounded-full bg-slate-200"></div>
-          {detail}
-        </span>
+      <div className="text-3xl font-black text-slate-900 tracking-tight tabular-nums">
+        {value}
       </div>
+      <div className="text-[10px] text-slate-400 font-bold mt-2">{detail}</div>
     </div>
   );
 }
