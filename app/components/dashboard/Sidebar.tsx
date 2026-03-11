@@ -29,7 +29,7 @@ const navItems = [
   { name: "المستودعات", href: "/dashboard/depots", icon: Building2 },
   { name: "شركات النقل", href: "/dashboard/transport-companies", icon: Truck },
   { name: "البوابات", href: "/dashboard/gates", icon: PackageSearch },
-  { name: "المنافذ", href: "/dashboard/ports", icon: ShipWheel },
+  { name: "الموانئ", href: "/dashboard/ports", icon: ShipWheel },
   { name: "الوجهات", href: "/dashboard/destinations", icon: MapPin },
   { name: "وحدات القياس", href: "/dashboard/units", icon: Package },
   { name: "أنواع العناصر", href: "/dashboard/item-types", icon: PackageSearch },

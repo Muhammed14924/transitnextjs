@@ -61,7 +61,7 @@ export default function TransportCompaniesPage() {
     isActive: true,
   });
 
-  const types = ["نقل داخلي", "نقل دولي", "ترانزيت", "شحن وتفريغ"];
+  const types = ["نقل داخلي", "نقل دولي", "ترانزيت", "شحن وتفريغ", "نقل بحري"];
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchData = async () => {
