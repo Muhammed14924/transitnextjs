@@ -25,7 +25,7 @@ export async function GET(
         sender_company: true,
         loading_port: true,
         discharge_port: true,
-        shipment_comp: true,
+        carrier: true,
         documents: true,
       },
     });

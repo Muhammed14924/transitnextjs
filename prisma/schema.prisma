@@ -282,11 +282,7 @@ model material_codes {
 
 
 
-model shipment_comp {
-  id                Int                 @id(map: "shipment_comp_pk")
-  ship_comp         String              @db.VarChar(50)
-  transit_shipments transit_shipments[]
-}
+
 
 model tariff_schedule {
   id           Int          @id
@@ -373,10 +369,10 @@ model transit_shipments {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  shipment_comp       shipment_comp? @relation(fields: [shipping_company], references: [id])
-  sender_company      companies?     @relation(fields: [sender_company_id], references: [id])
-  loading_port        ports?         @relation("LoadingPort", fields: [port_of_loading], references: [id])
-  discharge_port      ports?         @relation("DischargePort", fields: [port_of_discharge], references: [id])
+  carrier             transport_company? @relation(fields: [shipping_company], references: [id])
+  sender_company      companies?         @relation(fields: [sender_company_id], references: [id])
+  loading_port        ports?             @relation("LoadingPort", fields: [port_of_loading], references: [id])
+  discharge_port      ports?             @relation("DischargePort", fields: [port_of_discharge], references: [id])
   
   documents           shipment_documents[]
 }
@@ -399,12 +395,13 @@ model shipment_documents {
 }
 
 model document_vectors {
-  id                  Int       @id @default(autoincrement())
-  document_id         Int
-  content             String    @db.Text
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_id         Int?
+  text                String    @db.Text
+  metadata            Json?     
   embedding           Unsupported("vector(1536)") 
   
-  document            shipment_documents @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  document            shipment_documents? @relation(fields: [document_id], references: [id], onDelete: Cascade)
 }
 
 model transport {
@@ -448,8 +445,9 @@ model transport_company {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  // -- العلاقات القديمة (مهم إبقاؤها لعدم كسر الجداول الأخرى) --
-  transport_transport_transport_companyTotransport_company transport[] @relation("transport_transport_companyTotransport_company")
+  // -- العلاقات --
+  transport_transport_transport_companyTotransport_company transport[]          @relation("transport_transport_companyTotransport_company")
+  transit_shipments                                        transit_shipments[]
 }
 
 // model typeofitems {

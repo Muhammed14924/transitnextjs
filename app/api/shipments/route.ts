@@ -52,8 +52,8 @@ export async function GET(req: Request) {
             discharge_port: {
               select: { port_name: true, city: true },
             },
-            shipment_comp: {
-              select: { ship_comp: true },
+            carrier: {
+              select: { trans_name: true },
             },
             documents: {
               select: { id: true },

@@ -110,7 +110,7 @@ class ApiClient {
   }
 
   async getShippingCompanies() {
-    return this.request("/api/shipment-comps");
+    return this.request("/api/transport-companies");
   }
 
   async deleteShipment(id: number | string) {

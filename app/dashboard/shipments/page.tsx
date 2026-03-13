@@ -58,7 +58,7 @@ interface Port {
 }
 interface ShippingComp {
   id: number;
-  ship_comp: string;
+  trans_name: string;
 }
 interface ShipmentDoc {
   id: number;
@@ -86,7 +86,7 @@ interface Shipment {
   sender_company?: { company_name: string };
   loading_port?: { port_name: string; country?: string };
   discharge_port?: { port_name: string; city?: string };
-  shipment_comp?: { ship_comp: string };
+  carrier?: { trans_name: string };
   documents?: { id: number }[];
 }
 
@@ -447,10 +447,10 @@ export default function ShipmentsPage() {
                             </span>
                           </div>
                         </div>
-                        {s.shipment_comp?.ship_comp && (
+                        {s.carrier?.trans_name && (
                           <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-1">
                             <Ship size={10} className="text-blue-400" />
-                            <span>{s.shipment_comp.ship_comp}</span>
+                            <span>{s.carrier.trans_name}</span>
                           </div>
                         )}
                       </div>
@@ -674,7 +674,7 @@ export default function ShipmentsPage() {
                   <option value="">اختر شركة الشحن...</option>
                   {shippingComps.map((sc) => (
                     <option key={sc.id} value={sc.id}>
-                      {sc.ship_comp}
+                      {sc.trans_name}
                     </option>
                   ))}
                 </select>
