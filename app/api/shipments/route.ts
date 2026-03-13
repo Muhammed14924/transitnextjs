@@ -53,9 +53,7 @@ export async function GET(req: Request) {
             carrier: {
               select: { trans_name: true },
             },
-            documents: {
-              select: { id: true },
-            },
+            documents: true,
             containers: true,
           },
           orderBy: { createdAt: "desc" },
@@ -91,7 +89,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { user, error } = await requireRole(...CAN_WRITE_ROLES);
+    const { error } = await requireRole(...CAN_WRITE_ROLES);
     if (error) return error;
 
     const body = await req.json();
@@ -119,26 +117,27 @@ export async function POST(req: Request) {
             weight: c.weight ? parseFloat(c.weight) : null,
             empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null,
             customs_declaration_number: c.customs_declaration_number || null,
-            hs_code: c.hs_code || null,
-            items: c.item_ids && c.item_ids.length > 0 ? {
-              create: c.item_ids.map((itemId: number) => ({
-                comp_item: { connect: { id: parseInt(itemId as any) } }
-              }))
-            } : undefined
+            item_count: c.item_count ? parseInt(c.item_count) : null,
+            notes: c.notes || null,
           }))
         } : undefined,
-        documents: body.bl_document_url ? {
+        documents: body.documents && body.documents.length > 0 ? {
+          create: body.documents.map((doc: any) => ({
+            document_type: doc.document_type,
+            document_number: doc.document_number || null,
+            file_url: doc.file_url,
+            file_name: doc.file_name,
+          }))
+        } : (body.bl_document_url ? {
           create: [{
             document_type: 'BL',
             file_url: body.bl_document_url,
             file_name: body.bl_document_name || 'Bill of Lading',
           }]
-        } : undefined
+        } : undefined)
       },
       include: {
-        containers: {
-          include: { items: true }
-        },
+        containers: true,
         documents: true
       }
     });

@@ -58,13 +58,8 @@ interface Container {
   weight?: number;
   empty_return_date?: string;
   customs_declaration_number?: string;
-  hs_code?: string;
-  items?: { id: number; comp_item_id: number }[];
-}
-interface CompItem {
-  id: number;
-  item_ar_name: string;
-  composite_code?: string;
+  item_count?: number;
+  notes?: string;
 }
 interface Shipment {
   id: number;
@@ -83,18 +78,10 @@ interface Shipment {
   loading_port?: { port_name: string; country?: string };
   discharge_port?: { port_name: string; city?: string };
   carrier?: { trans_name: string };
-  documents?: { id: number; file_url: string; file_name: string; document_type: string }[];
+  documents?: { id: number; file_url: string; file_name: string; document_type: string; document_number?: string }[];
   containers?: Container[];
 }
 
-interface ShipmentDoc {
-  id: number;
-  file_name: string;
-  file_url: string;
-  document_type: string;
-  document_number?: string;
-  createdAt: string;
-}
 interface ShipmentCompany {
   id: number;
   company_name?: string;
@@ -114,11 +101,11 @@ interface ShippingComp {
 const containerSchema = z.object({
   container_number: z.string().min(1, "رقم الحاوية مطلوب"),
   container_type: z.string().optional(),
-  weight: z.number().optional(),
-  empty_return_date: z.string().optional(),
-  customs_declaration_number: z.string().optional(),
-  hs_code: z.string().optional(),
-  item_ids: z.array(z.number()).default([]),
+  weight: z.number().optional().nullable(),
+  empty_return_date: z.string().optional().nullable(),
+  customs_declaration_number: z.string().optional().nullable(),
+  item_count: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 const shipmentSchema = z.object({
@@ -133,20 +120,24 @@ const shipmentSchema = z.object({
   free_time_days: z.number().int().min(0).default(14),
   isActive: z.boolean().default(true),
   containers: z.array(containerSchema).default([]),
-  bl_document_url: z.string().optional().nullable(),
-  bl_document_name: z.string().optional().nullable(),
+  documents: z.array(z.object({
+    dbId: z.number().optional(),
+    document_type: z.string(),
+    document_number: z.string().optional().nullable(),
+    file_url: z.string(),
+    file_name: z.string(),
+  })).default([]),
 });
 
-type ShipmentFormValues = any;
+
 
 // ===================== Document types list =====================
 const DOCUMENT_TYPES = [
-  { value: "BL", label: "بوليصة الشحن (BL)" },
-  { value: "INVOICE", label: "فاتورة تجارية" },
-  { value: "PACKING_LIST", label: "قائمة التعبئة" },
-  { value: "CUSTOMS_DEC", label: "بيان جمركي" },
-  { value: "CERTIFICATE", label: "شهادة منشأ" },
-  { value: "INSURANCE", label: "وثيقة تأمين" },
+  { value: "BL", label: "بوليصة الشحن" },
+  { value: "FACTORY_INVOICE", label: "فاتورة المعمل" },
+  { value: "ORIGIN_CERT", label: "شهادة المنشأ" },
+  { value: "HEALTH_CERT", label: "شهادة صحية" },
+  { value: "CHECKLIST", label: "checklist" },
   { value: "OTHER", label: "أخرى" },
 ];
 
@@ -168,7 +159,6 @@ export default function ShipmentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDocsDialogOpen, setIsDocsDialogOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(
     null,
   );
@@ -177,11 +167,11 @@ export default function ShipmentsPage() {
   const [companies, setCompanies] = useState<ShipmentCompany[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [shippingComps, setShippingComps] = useState<ShippingComp[]>([]);
-  const [compItems, setCompItems] = useState<CompItem[]>([]);
+  // const [compItems, setCompItems] = useState<CompItem[]>([]);
   
-  const [isUploadingBL, setIsUploadingBL] = useState(false);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
-  const form = useForm<any>({
+  const form = useForm({
     resolver: zodResolver(shipmentSchema),
     defaultValues: {
       bl_number: "",
@@ -189,6 +179,7 @@ export default function ShipmentsPage() {
       free_time_days: 14,
       isActive: true,
       containers: [],
+      documents: [],
     },
   });
 
@@ -199,12 +190,18 @@ export default function ShipmentsPage() {
       free_time_days: 14,
       isActive: true,
       containers: [],
+      documents: [],
     });
   }, [form]);
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: containerFields, append: appendContainer, remove: removeContainer } = useFieldArray({
     control: form.control,
     name: "containers",
+  });
+
+  const { fields: docFields, append: appendDoc, remove: removeDoc } = useFieldArray({
+    control: form.control,
+    name: "documents",
   });
 
   // ===================== Fetch Data =====================
@@ -229,16 +226,14 @@ export default function ShipmentsPage() {
 
   const fetchMasterData = async () => {
     try {
-      const [comps, pts, shipComps, items] = await Promise.all([
+      const [comps, pts, shipComps] = await Promise.all([
         apiClient.getCompanies(),
         apiClient.getPorts(),
         apiClient.getShippingCompanies(),
-        apiClient.getCompItems(),
       ]);
       if (comps) setCompanies(Array.isArray(comps) ? comps : []);
       if (pts) setPorts(Array.isArray(pts) ? pts : []);
       if (shipComps) setShippingComps(Array.isArray(shipComps) ? shipComps : []);
-      if (items) setCompItems(Array.isArray(items) ? items : []);
     } catch (e) {
       console.error("Master data fetch error", e);
     }
@@ -250,7 +245,7 @@ export default function ShipmentsPage() {
   }, [fetchShipments]);
 
   // ===================== CRUD Handlers =====================
-  const onSubmit = async (values: any) => {
+  const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
     try {
       if (isEditDialogOpen && selectedShipment) {
         await apiClient.updateShipment(selectedShipment.id, values);
@@ -302,28 +297,44 @@ export default function ShipmentsPage() {
         weight: c.weight ? Number(c.weight) : undefined,
         empty_return_date: c.empty_return_date ? new Date(c.empty_return_date).toISOString().split("T")[0] : "",
         customs_declaration_number: c.customs_declaration_number || "",
-        hs_code: c.hs_code || "",
-        item_ids: c.items?.map(i => i.comp_item_id) || [],
+        item_count: c.item_count || undefined,
+        notes: c.notes || "",
+      })) || [],
+      documents: shipment.documents?.map(d => ({
+        dbId: d.id,
+        document_type: d.document_type,
+        document_number: d.document_number || "",
+        file_url: d.file_url,
+        file_name: d.file_name,
       })) || [],
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleBLUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [selectedDocType, setSelectedDocType] = useState("BL");
+  const [selectedDocNumber, setSelectedDocNumber] = useState("");
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsUploadingBL(true);
+    setIsUploadingDoc(true);
     try {
       const res = await apiClient.uploadToS3(file);
       if (res?.fileUrl) {
-        form.setValue("bl_document_url", res.fileUrl);
-        form.setValue("bl_document_name", file.name);
-        toast.success("تم رفع بوليصة الشحن بنجاح");
+        appendDoc({
+          document_type: selectedDocType,
+          document_number: selectedDocNumber || "",
+          file_url: res.fileUrl,
+          file_name: file.name,
+        });
+        toast.success("تم رفع المستند بنجاح ✅");
+        setSelectedDocNumber("");
       }
     } catch {
       toast.error("فشل رفع الملف");
     } finally {
-      setIsUploadingBL(false);
+      setIsUploadingDoc(false);
+      e.target.value = "";
     }
   };
 
@@ -543,18 +554,6 @@ export default function ShipmentsPage() {
                     </TableCell>
                     <TableCell className="px-8 py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedShipment(s);
-                            setIsDocsDialogOpen(true);
-                          }}
-                          className="h-9 w-9 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
-                          title="المستندات"
-                        >
-                          <FileText size={16} />
-                        </Button>
                         {canWrite && (
                           <>
                             <Button
@@ -773,38 +772,121 @@ export default function ShipmentsPage() {
                 </Label>
               </div>
 
-              {/* -- S3 BL Upload -- */}
-              <div className="col-span-1 md:col-span-2 space-y-2 text-right bg-blue-50/30 p-4 rounded-2xl border border-dashed border-blue-100">
-                <Label className="font-black text-blue-900 flex items-center gap-2">
-                  <FileUp size={16} /> رفع بوليصة الشحن (Bill of Lading)
+              {/* -- Multi Document Upload Section -- */}
+              <div className="col-span-1 md:col-span-2 space-y-4 text-right bg-slate-50/50 p-6 rounded-[24px] border border-slate-100">
+                <Label className="font-black text-slate-900 flex items-center gap-2 text-lg mb-2">
+                  <FileUp size={20} className="text-primary" /> مستندات الشحنة
                 </Label>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-black text-slate-500">نوع المستند</Label>
+                    <select
+                      value={selectedDocType}
+                      onChange={(e) => setSelectedDocType(e.target.value)}
+                      className="w-full h-11 rounded-xl bg-slate-50 border-none px-4 text-sm font-bold text-slate-700"
+                    >
+                      {DOCUMENT_TYPES.map((dt) => (
+                        <option key={dt.value} value={dt.value}>{dt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-black text-slate-500">رقم المستند (اختياري)</Label>
+                    <Input
+                      value={selectedDocNumber}
+                      onChange={(e) => setSelectedDocNumber(e.target.value)}
+                      className="h-11 rounded-xl bg-slate-50 border-none px-4"
+                      placeholder="رقم الفاتورة أو البوليصة..."
+                    />
+                  </div>
+                  <div className="md:col-span-2 relative">
                     <input
                       type="file"
-                      onChange={handleBLUpload}
+                      onChange={handleDocUpload}
                       className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                      disabled={isUploadingBL}
+                      disabled={isUploadingDoc}
                     />
                     <Button
                       type="button"
-                      disabled={isUploadingBL}
-                      className="w-full h-12 rounded-xl border-dashed border-2 border-primary/20 bg-white text-primary hover:bg-primary/5 gap-2 font-bold"
+                      disabled={isUploadingDoc}
+                      className="w-full h-12 rounded-xl border-dashed border-2 border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 gap-2 font-bold"
                     >
-                      {isUploadingBL ? "جاري الرفع..." : "اختر ملف البوليصة..."}
+                      {isUploadingDoc ? "⏳ جاري الرفع..." : <><Upload size={16} /> اختر ملف لرفعه</>}
                     </Button>
                   </div>
-                  {form.watch("bl_document_url") && (
-                    <Badge className="bg-emerald-50 text-emerald-600 border-none px-3 font-bold h-10 flex items-center gap-2">
-                      <CheckCircle2 size={14} /> تم الرفع
-                    </Badge>
+                </div>
+
+                {/* List of uploaded documents in Form */}
+                <div className="space-y-3 mt-4">
+                  {(docFields as any[]).map((doc, index: number) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                          <FileText size={18} className="text-indigo-500" />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-bold text-slate-700 truncate block">
+                            {doc.file_name || "مستند بدون اسم"}
+                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <Badge variant="outline" className="text-[9px] py-0 px-1.5 rounded-full border-slate-100 font-bold">
+                              {DOCUMENT_TYPES.find(t => t.value === doc.document_type)?.label || doc.document_type}
+                            </Badge>
+                            {doc.document_number && (
+                              <span className="text-[10px] text-slate-400">#{doc.document_number}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => window.open(doc.file_url, "_blank")}
+                          className="h-9 w-9 text-slate-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-colors"
+                        >
+                          <Search size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={async () => {
+                            if (doc.dbId) {
+                              // Existing doc in DB
+                              if (confirm("هل أنت متأكد من حذف هذا المستند نهائياً؟ سيتم حذفه من السيرفر أيضاً.")) {
+                                try {
+                                  await apiClient.deleteShipmentDocument(selectedShipment!.id, doc.dbId);
+                                  removeDoc(index);
+                                  toast.success("تم حذف المستند بنجاح");
+                                } catch {
+                                  toast.error("فشل حذف المستند");
+                                }
+                              }
+                            } else {
+                              // New doc not yet in DB
+                              if (doc.file_url) {
+                                await apiClient.deleteFromS3(doc.file_url).catch(console.error);
+                              }
+                              removeDoc(index);
+                              toast.success("تم إزالة المستند");
+                            }
+                          }}
+                          className="h-9 w-9 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {docFields.length === 0 && (
+                    <div className="text-center py-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-slate-300 text-xs font-bold italic">لا توجد مستندات مرفوعة بعد</p>
+                    </div>
                   )}
                 </div>
-                {form.watch("bl_document_name") && (
-                  <p className="text-[10px] text-slate-400 font-bold mr-1">
-                    الملف: {form.watch("bl_document_name")}
-                  </p>
-                )}
               </div>
             </div>
 
@@ -812,15 +894,14 @@ export default function ShipmentsPage() {
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-slate-900 flex items-center gap-2 text-lg">
-                  <Layers className="text-primary" size={20} /> تفاصيل الحاويات ({fields.length})
+                  <Layers className="text-primary" size={20} /> تفاصيل الحاويات ({containerFields.length})
                 </h3>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => append({ 
+                  onClick={() => appendContainer({ 
                     container_number: "", 
                     container_type: "40HC",
-                    item_ids: []
                   })}
                   className="rounded-xl gap-2 font-bold h-10 px-4 border-primary/20 text-primary"
                 >
@@ -829,13 +910,13 @@ export default function ShipmentsPage() {
               </div>
 
               <div className="space-y-4">
-                {fields.map((field, index) => (
+                {containerFields.map((field, index) => (
                   <Card key={field.id} className="p-5 border-slate-100 shadow-sm relative group bg-slate-50/50">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      onClick={() => remove(index)}
+                      onClick={() => removeContainer(index)}
                       className="absolute top-2 left-2 text-slate-300 hover:text-rose-600 h-8 w-8"
                     >
                       <X size={16} />
@@ -881,38 +962,25 @@ export default function ShipmentsPage() {
                         />
                       </div>
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">كود HS</Label>
+                        <Label className="text-[11px] font-black text-slate-500">العدد</Label>
                         <Input 
-                          {...form.register(`containers.${index}.hs_code`)}
+                          type="number"
+                          {...form.register(`containers.${index}.item_count`, { valueAsNumber: true })}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                         />
                       </div>
                       <div className="col-span-full space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">الأصناف (Items)</Label>
-                        <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-white border border-slate-100 min-h-[44px]">
-                          {compItems.length > 0 ? (
-                            <select
-                              multiple
-                              className="w-full text-xs font-bold border-none outline-none min-h-[100px]"
-                              value={form.watch(`containers.${index}.item_ids`)?.map(String) || []}
-                              onChange={(e) => {
-                                const vals = Array.from(e.target.selectedOptions, (option) => Number(option.value));
-                                form.setValue(`containers.${index}.item_ids`, vals);
-                              }}
-                            >
-                              {compItems.map(item => (
-                                <option key={item.id} value={item.id}>{item.item_ar_name} ({item.composite_code})</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <p className="text-[10px] text-slate-300 italic">جاري تحميل الأصناف...</p>
-                          )}
-                        </div>
+                        <Label className="text-[11px] font-black text-slate-500">ملاحظات الحاوية</Label>
+                        <Input 
+                          {...form.register(`containers.${index}.notes`)}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm w-full"
+                          placeholder="مثلاً: بضاعة قابلة للكسر..."
+                        />
                       </div>
                     </div>
                   </Card>
                 ))}
-                {fields.length === 0 && (
+                {containerFields.length === 0 && (
                   <div className="text-center py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
                     <p className="text-slate-400 font-bold italic">لم يتم إضافة حاويات بعد</p>
                   </div>
@@ -982,228 +1050,7 @@ export default function ShipmentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ==================== Documents Dialog ==================== */}
-      <DocumentsDialog
-        open={isDocsDialogOpen}
-        onOpenChange={setIsDocsDialogOpen}
-        shipment={selectedShipment}
-      />
     </div>
-  );
-}
-
-// ===================== Documents Dialog Component =====================
-function DocumentsDialog({
-  open,
-  onOpenChange,
-  shipment,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  shipment: Shipment | null;
-}) {
-  const [docs, setDocs] = useState<ShipmentDoc[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [docType, setDocType] = useState("OTHER");
-  const [docNumber, setDocNumber] = useState("");
-
-  const fetchDocs = useCallback(async () => {
-    if (!shipment) return;
-    setLoading(true);
-    try {
-      const data = await apiClient.getShipmentDocuments(shipment.id);
-      if (data) setDocs(Array.isArray(data) ? data : []);
-    } catch {
-      toast.error("فشل تحميل المستندات");
-    } finally {
-      setLoading(false);
-    }
-  }, [shipment]);
-
-  useEffect(() => {
-    if (open && shipment) {
-      fetchDocs();
-      setDocType("OTHER");
-      setDocNumber("");
-    }
-  }, [open, fetchDocs, shipment]);
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !shipment) return;
-
-    setUploading(true);
-    try {
-      const uploadRes = await apiClient.uploadToS3(file);
-      if (uploadRes && uploadRes.fileUrl) {
-        await apiClient.createShipmentDocument(shipment.id, {
-          document_type: docType,
-          document_number: docNumber || null,
-          file_url: uploadRes.fileUrl,
-          file_name: file.name,
-        });
-        toast.success("تم رفع المستند بنجاح ✅");
-        fetchDocs();
-        setDocNumber("");
-      }
-    } catch {
-      toast.error("فشل رفع الملف — تأكد من اتصال S3");
-    } finally {
-      setUploading(false);
-      // Reset file input
-      e.target.value = "";
-    }
-  };
-
-  const docTypeLabel = (val: string) => {
-    const found = DOCUMENT_TYPES.find((d) => d.value === val);
-    return found ? found.label : val;
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-[650px] rounded-3xl p-8 max-h-[85vh] overflow-y-auto"
-        dir="rtl"
-      >
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-right flex items-center gap-2">
-            <FileText className="text-primary" size={20} />
-            مستندات الشحنة: {shipment?.bl_number || `SH-${shipment?.id}`}
-          </DialogTitle>
-          <DialogDescription className="text-right">
-            عرض ورفع المستندات المرفقة بهذه الشحنة (بوليصة، فاتورة، بيان جمركي،
-            إلخ).
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-5 py-4">
-          {/* Upload Section */}
-          <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-5 rounded-2xl border border-dashed border-slate-200 space-y-4">
-            <p className="text-sm font-black text-slate-700">
-              📎 رفع مستند جديد
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1.5 text-right">
-                <Label className="text-xs font-bold text-slate-500">
-                  نوع المستند
-                </Label>
-                <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  className="w-full h-11 rounded-xl bg-white border border-slate-100 px-4 text-sm font-bold text-slate-700"
-                >
-                  {DOCUMENT_TYPES.map((dt) => (
-                    <option key={dt.value} value={dt.value}>
-                      {dt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5 text-right">
-                <Label className="text-xs font-bold text-slate-500">
-                  رقم المستند (اختياري)
-                </Label>
-                <Input
-                  value={docNumber}
-                  onChange={(e) => setDocNumber(e.target.value)}
-                  className="rounded-xl h-11 bg-white border-slate-100 px-4"
-                  placeholder="INV-001..."
-                />
-              </div>
-            </div>
-
-            <div className="relative flex items-center justify-center">
-              <input
-                type="file"
-                onChange={handleUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                disabled={uploading}
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-              />
-              <Button
-                disabled={uploading}
-                className="rounded-xl gap-2 font-bold h-12 w-full bg-primary/90 hover:bg-primary transition-colors shadow-md"
-              >
-                {uploading ? (
-                  "⏳ جاري الرفع إلى الخادم..."
-                ) : (
-                  <>
-                    <Upload size={16} /> اختر ملف ورفعه
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Documents List */}
-          <div className="space-y-2">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">
-              المستندات المرفوعة ({docs.length})
-            </p>
-            {loading ? (
-              <p className="text-center text-slate-400 py-8">جاري التحميل...</p>
-            ) : docs.length > 0 ? (
-              docs.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-xl hover:bg-slate-50/50 hover:border-slate-200 transition-all group"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-                      <FileText className="text-indigo-500" size={18} />
-                    </div>
-                    <div className="flex flex-col text-right min-w-0">
-                      <span className="text-sm font-bold text-slate-700 truncate block">
-                        {d.file_name}
-                      </span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] py-0 px-1.5 rounded-full font-bold border-slate-200"
-                        >
-                          {docTypeLabel(d.document_type)}
-                        </Badge>
-                        {d.document_number && (
-                          <span className="text-[9px] text-slate-400">
-                            #{d.document_number}
-                          </span>
-                        )}
-                        <span className="text-[9px] text-slate-300">
-                          {new Date(d.createdAt).toLocaleDateString("ar-SA")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                    className="text-primary font-bold shrink-0 hover:bg-primary/5 rounded-lg"
-                  >
-                    <a href={d.file_url} target="_blank" rel="noreferrer">
-                      عرض ↗
-                    </a>
-                  </Button>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12 text-slate-300">
-                <FileText className="mx-auto mb-3 text-slate-200" size={40} />
-                <p className="italic font-bold">
-                  لا توجد مستندات مرفوعة حتى الآن
-                </p>
-                <p className="text-[11px] mt-1">
-                  استخدم النموذج أعلاه لرفع أول مستند
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 

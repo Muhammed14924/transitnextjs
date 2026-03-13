@@ -99,6 +99,12 @@ class ApiClient {
     });
   }
 
+  async deleteShipmentDocument(shipmentId: number | string, docId: number | string) {
+    return this.request(`/api/shipments/${shipmentId}/documents/${docId}`, {
+      method: "DELETE",
+    });
+  }
+
   async uploadToS3(file: File) {
     const formData = new FormData();
     formData.append("file", file);
@@ -106,6 +112,12 @@ class ApiClient {
     return this.request("/api/upload-s3", {
       method: "POST",
       body: formData,
+    });
+  }
+
+  async deleteFromS3(fileUrl: string) {
+    return this.request(`/api/upload-s3?fileUrl=${encodeURIComponent(fileUrl)}`, {
+      method: "DELETE",
     });
   }
 

@@ -38,7 +38,6 @@ const navItems = [
     href: "/dashboard/company-items",
     icon: PackageSearch,
   },
-  { name: "المستندات", href: "/dashboard/documents", icon: PackageSearch },
   { name: "المستخدمين", href: "/dashboard/users", icon: Users },
   { name: "الإعدادات", href: "/dashboard/settings", icon: Settings },
 ];

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 // تهيئة الاتصال بسيرفر SeaweedFS الخاص بك
 const s3Client = new S3Client({
@@ -11,6 +11,48 @@ const s3Client = new S3Client({
   },
   forcePathStyle: true, // مهم جداً للخوادم الخاصة (MinIO / SeaweedFS)
 });
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const fileUrl = searchParams.get("fileUrl");
+
+    if (!fileUrl) {
+      return NextResponse.json(
+        { error: "رابط الملف مطلوب" },
+        { status: 400 }
+      );
+    }
+
+    // استخراج الـ Key من الرابط
+    // الرابط يكون بالتنسيق: endpoint/bucket/key
+    const bucketName = process.env.S3_BUCKET_NAME!;
+    const parts = fileUrl.split(`${bucketName}/`);
+    const key = parts[parts.length - 1];
+
+    if (!key) {
+      return NextResponse.json(
+        { error: "تعذر استخراج اسم الملف من الرابط" },
+        { status: 400 }
+      );
+    }
+
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    await s3Client.send(command);
+
+    return NextResponse.json({ success: true, message: "تم حذف الملف من S3" });
+  } catch (error: any) {
+    console.error("Error deleting file from S3:", error);
+    return NextResponse.json(
+      { error: "فشل في حذف الملف من S3: " + error.message },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {

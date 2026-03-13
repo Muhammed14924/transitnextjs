@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+
+const s3Client = new S3Client({
+  region: "auto",
+  endpoint: process.env.S3_ENDPOINT!,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY!,
+    secretAccessKey: process.env.S3_SECRET_KEY!,
+  },
+  forcePathStyle: true,
+});
 
 export async function GET(
   req: Request,
@@ -27,9 +38,7 @@ export async function GET(
         discharge_port: true,
         carrier: true,
         documents: true,
-        containers: {
-          include: { items: true }
-        }
+        containers: true
       },
     });
 
@@ -68,10 +77,53 @@ export async function PATCH(
 
     const body = await req.json();
 
-    // 1. Delete existing containers (if we want to replace them all for simplicity)
+    // 1. Fetch current state for syncing
+    const shipment = await prisma.transit_shipments.findUnique({
+      where: { id: shipmentId },
+      include: { documents: true }
+    });
+
+    if (!shipment) {
+      return NextResponse.json({ error: "Shipment not found" }, { status: 404 });
+    }
+
+    // 2. Delete existing containers (if we want to replace them all for simplicity)
     await prisma.shipment_containers.deleteMany({
       where: { shipment_id: shipmentId }
     });
+
+    // 2. Sync Documents
+    const incomingDocs = (body.documents || []) as Array<{ dbId?: number; document_type: string; document_number?: string; file_url: string; file_name: string }>;
+    const currentDocs = shipment.documents || [];
+    const currentDocIds = currentDocs.map(d => d.id);
+    const incomingDocIds = incomingDocs
+      .filter(d => d.dbId)
+      .map(d => d.dbId as number);
+
+    // Find documents to delete (in DB but not in incoming)
+    const toDeleteIds = currentDocIds.filter(id => !incomingDocIds.includes(id));
+    const toDeleteDocs = currentDocs.filter(d => toDeleteIds.includes(d.id));
+
+    // Delete removed documents from DB and S3
+    if (toDeleteIds.length > 0) {
+      await prisma.shipment_documents.deleteMany({
+        where: { id: { in: toDeleteIds } }
+      });
+
+      const bucketName = process.env.S3_BUCKET_NAME!;
+      for (const doc of toDeleteDocs) {
+        try {
+          const parts = doc.file_url.split(`${bucketName}/`);
+          const key = parts[parts.length - 1];
+          if (key) {
+            const command = new DeleteObjectCommand({ Bucket: bucketName, Key: key });
+            await s3Client.send(command).catch(e => console.error("S3 Cleanup failed:", e));
+          }
+        } catch (e) {
+          console.error("Doc cleanup loop error:", e);
+        }
+      }
+    }
 
     const updated = await prisma.transit_shipments.update({
       where: { id: shipmentId },
@@ -89,25 +141,30 @@ export async function PATCH(
         status: body.status || undefined,
         isActive: body.isActive !== undefined ? body.isActive : undefined,
         containers: body.containers && body.containers.length > 0 ? {
-          create: body.containers.map((c: any) => ({
+          create: body.containers.map((c: { container_number: string; container_type?: string; weight?: string; empty_return_date?: string; customs_declaration_number?: string; item_count?: string; notes?: string }) => ({
             container_number: c.container_number,
             container_type: c.container_type || null,
             weight: c.weight ? parseFloat(c.weight) : null,
             empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null,
             customs_declaration_number: c.customs_declaration_number || null,
-            hs_code: c.hs_code || null,
-            items: c.item_ids && c.item_ids.length > 0 ? {
-              create: c.item_ids.map((itemId: number) => ({
-                comp_item: { connect: { id: parseInt(itemId as any) } }
-              }))
-            } : undefined
+            item_count: c.item_count ? parseInt(c.item_count) : null,
+            notes: c.notes || null,
           }))
+        } : undefined,
+        documents: incomingDocs.length > 0 ? {
+          create: incomingDocs
+            .filter(d => !d.dbId) // Only create new ones (those without dbId)
+            .map(d => ({
+              document_type: d.document_type,
+              document_number: d.document_number || null,
+              file_url: d.file_url,
+              file_name: d.file_name,
+            }))
         } : undefined,
       },
       include: {
-        containers: {
-          include: { items: true }
-        }
+        containers: true,
+        documents: true
       }
     });
 
@@ -137,21 +194,41 @@ export async function DELETE(
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    // Check if shipment exists before trying to delete
-    const existing = await prisma.transit_shipments.findUnique({
+    // 1. Fetch shipment with documents for S3 cleanup
+    const shipment = await prisma.transit_shipments.findUnique({
       where: { id: shipmentId },
+      include: { documents: true }
     });
 
-    if (!existing) {
+    if (!shipment) {
       return NextResponse.json(
         { error: "الشحنة غير موجودة أو تم حذفها مسبقاً" },
         { status: 404 },
       );
     }
 
+    // 2. Delete from DB (will cascade delete documents)
     await prisma.transit_shipments.delete({
       where: { id: shipmentId },
     });
+
+    // 3. Cleanup S3
+    const bucketName = process.env.S3_BUCKET_NAME!;
+    for (const doc of shipment.documents) {
+      try {
+        const parts = doc.file_url.split(`${bucketName}/`);
+        const key = parts[parts.length - 1];
+        if (key) {
+          const command = new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+          });
+          await s3Client.send(command).catch(e => console.error(`S3 Delete failed for ${key}:`, e));
+        }
+      } catch (s3Err) {
+        console.error("Error processing S3 cleanup for document:", s3Err);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
