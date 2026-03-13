@@ -14,7 +14,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(items);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Error fetching items" },
       { status: 500 },
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       date_exp,
       GTIP,
       image,
+      manufacturer_code,
     } = body;
 
     // 1. Fetch Company Info
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
         date_exp: date_exp ? new Date(date_exp) : null,
         GTIP: GTIP ? parseInt(GTIP) : null,
         image: image || null,
+        manufacturer_code: manufacturer_code || null,
         ismain_item: ismain_item || false,
         main_item: !ismain_item && main_item ? parseInt(main_item) : null,
         internal_code,
@@ -112,10 +114,11 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(newItem, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating item:", error);
+    const message = error instanceof Error ? error.message : "Error creating item";
     return NextResponse.json(
-      { error: error.message || "Error creating item" },
+      { error: message },
       { status: 500 },
     );
   }

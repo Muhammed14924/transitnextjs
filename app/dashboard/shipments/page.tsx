@@ -78,7 +78,13 @@ interface Shipment {
   loading_port?: { port_name: string; country?: string };
   discharge_port?: { port_name: string; city?: string };
   carrier?: { trans_name: string };
-  documents?: { id: number; file_url: string; file_name: string; document_type: string; document_number?: string }[];
+  documents?: {
+    id: number;
+    file_url: string;
+    file_name: string;
+    document_type: string;
+    document_number?: string;
+  }[];
   containers?: Container[];
 }
 
@@ -120,16 +126,18 @@ const shipmentSchema = z.object({
   free_time_days: z.number().int().min(0).default(14),
   isActive: z.boolean().default(true),
   containers: z.array(containerSchema).default([]),
-  documents: z.array(z.object({
-    dbId: z.number().optional(),
-    document_type: z.string(),
-    document_number: z.string().optional().nullable(),
-    file_url: z.string(),
-    file_name: z.string(),
-  })).default([]),
+  documents: z
+    .array(
+      z.object({
+        dbId: z.number().optional(),
+        document_type: z.string(),
+        document_number: z.string().optional().nullable(),
+        file_url: z.string(),
+        file_name: z.string(),
+      }),
+    )
+    .default([]),
 });
-
-
 
 // ===================== Document types list =====================
 const DOCUMENT_TYPES = [
@@ -168,7 +176,7 @@ export default function ShipmentsPage() {
   const [ports, setPorts] = useState<Port[]>([]);
   const [shippingComps, setShippingComps] = useState<ShippingComp[]>([]);
   // const [compItems, setCompItems] = useState<CompItem[]>([]);
-  
+
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
   const form = useForm({
@@ -194,12 +202,20 @@ export default function ShipmentsPage() {
     });
   }, [form]);
 
-  const { fields: containerFields, append: appendContainer, remove: removeContainer } = useFieldArray({
+  const {
+    fields: containerFields,
+    append: appendContainer,
+    remove: removeContainer,
+  } = useFieldArray({
     control: form.control,
     name: "containers",
   });
 
-  const { fields: docFields, append: appendDoc, remove: removeDoc } = useFieldArray({
+  const {
+    fields: docFields,
+    append: appendDoc,
+    remove: removeDoc,
+  } = useFieldArray({
     control: form.control,
     name: "documents",
   });
@@ -233,7 +249,8 @@ export default function ShipmentsPage() {
       ]);
       if (comps) setCompanies(Array.isArray(comps) ? comps : []);
       if (pts) setPorts(Array.isArray(pts) ? pts : []);
-      if (shipComps) setShippingComps(Array.isArray(shipComps) ? shipComps : []);
+      if (shipComps)
+        setShippingComps(Array.isArray(shipComps) ? shipComps : []);
     } catch (e) {
       console.error("Master data fetch error", e);
     }
@@ -287,26 +304,34 @@ export default function ShipmentsPage() {
       sender_company_id: (shipment.sender_company_id || "").toString(),
       port_of_loading: (shipment.port_of_loading || "").toString(),
       port_of_discharge: (shipment.port_of_discharge || "").toString(),
-      arrival_date: shipment.arrival_date ? new Date(shipment.arrival_date).toISOString().split("T")[0] : "",
-      expected_discharge_date: shipment.expected_discharge_date ? new Date(shipment.expected_discharge_date).toISOString().split("T")[0] : "",
+      arrival_date: shipment.arrival_date
+        ? new Date(shipment.arrival_date).toISOString().split("T")[0]
+        : "",
+      expected_discharge_date: shipment.expected_discharge_date
+        ? new Date(shipment.expected_discharge_date).toISOString().split("T")[0]
+        : "",
       free_time_days: shipment.free_time_days || 14,
       isActive: shipment.isActive !== false,
-      containers: shipment.containers?.map(c => ({
-        container_number: c.container_number,
-        container_type: c.container_type || "",
-        weight: c.weight ? Number(c.weight) : undefined,
-        empty_return_date: c.empty_return_date ? new Date(c.empty_return_date).toISOString().split("T")[0] : "",
-        customs_declaration_number: c.customs_declaration_number || "",
-        item_count: c.item_count || undefined,
-        notes: c.notes || "",
-      })) || [],
-      documents: shipment.documents?.map(d => ({
-        dbId: d.id,
-        document_type: d.document_type,
-        document_number: d.document_number || "",
-        file_url: d.file_url,
-        file_name: d.file_name,
-      })) || [],
+      containers:
+        shipment.containers?.map((c) => ({
+          container_number: c.container_number,
+          container_type: c.container_type || "",
+          weight: c.weight ? Number(c.weight) : undefined,
+          empty_return_date: c.empty_return_date
+            ? new Date(c.empty_return_date).toISOString().split("T")[0]
+            : "",
+          customs_declaration_number: c.customs_declaration_number || "",
+          item_count: c.item_count || undefined,
+          notes: c.notes || "",
+        })) || [],
+      documents:
+        shipment.documents?.map((d) => ({
+          dbId: d.id,
+          document_type: d.document_type,
+          document_number: d.document_number || "",
+          file_url: d.file_url,
+          file_name: d.file_name,
+        })) || [],
     });
     setIsEditDialogOpen(true);
   };
@@ -355,7 +380,7 @@ export default function ShipmentsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Truck className="text-primary" /> إدارة شحنات الترانزيت
+            <Truck className="text-primary" /> إدارة النقل البحري
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
             متابعة البوالص، الحاويات، والمستندات الجمركية للشحنات الصادرة
@@ -542,7 +567,8 @@ export default function ShipmentsPage() {
                         </Badge>
                         <div className="flex gap-3 text-[10px] font-bold text-slate-400">
                           <span className="flex items-center gap-0.5">
-                            <Layers size={10} /> {(s.containers?.length) || 0} حاوية
+                            <Layers size={10} /> {s.containers?.length || 0}{" "}
+                            حاوية
                           </span>
                         </div>
                         {s.documents && s.documents.length > 0 && (
@@ -619,7 +645,7 @@ export default function ShipmentsPage() {
             <DialogTitle className="text-2xl font-black text-slate-900 text-right">
               {isEditDialogOpen
                 ? "✏️ تعديل بيانات الشحنة"
-                : "📦 تسجيل شحنة ترانزيت جديدة"}
+                : "📦 تسجيل شحنة بحرية جديدة"}
             </DialogTitle>
             <DialogDescription className="text-right font-bold text-slate-400 mt-2">
               يرجى إدخال جميع تفاصيل البوليصة، الموانئ، الحاويات، وشركة الشحن.
@@ -642,7 +668,9 @@ export default function ShipmentsPage() {
                   placeholder="MSCU123456..."
                 />
                 {form.formState.errors.bl_number && (
-                  <p className="text-rose-500 text-xs mt-1">{(form.formState.errors.bl_number.message as string)}</p>
+                  <p className="text-rose-500 text-xs mt-1">
+                    {form.formState.errors.bl_number.message as string}
+                  </p>
                 )}
               </div>
 
@@ -767,9 +795,7 @@ export default function ShipmentsPage() {
                   {...form.register("isActive")}
                   className="h-5 w-5 rounded-lg accent-primary"
                 />
-                <Label className="font-bold text-slate-700">
-                  الشحنة نشطة
-                </Label>
+                <Label className="font-bold text-slate-700">الشحنة نشطة</Label>
               </div>
 
               {/* -- Multi Document Upload Section -- */}
@@ -777,22 +803,28 @@ export default function ShipmentsPage() {
                 <Label className="font-black text-slate-900 flex items-center gap-2 text-lg mb-2">
                   <FileUp size={20} className="text-primary" /> مستندات الشحنة
                 </Label>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] font-black text-slate-500">نوع المستند</Label>
+                    <Label className="text-[11px] font-black text-slate-500">
+                      نوع المستند
+                    </Label>
                     <select
                       value={selectedDocType}
                       onChange={(e) => setSelectedDocType(e.target.value)}
                       className="w-full h-11 rounded-xl bg-slate-50 border-none px-4 text-sm font-bold text-slate-700"
                     >
                       {DOCUMENT_TYPES.map((dt) => (
-                        <option key={dt.value} value={dt.value}>{dt.label}</option>
+                        <option key={dt.value} value={dt.value}>
+                          {dt.label}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] font-black text-slate-500">رقم المستند (اختياري)</Label>
+                    <Label className="text-[11px] font-black text-slate-500">
+                      رقم المستند (اختياري)
+                    </Label>
                     <Input
                       value={selectedDocNumber}
                       onChange={(e) => setSelectedDocNumber(e.target.value)}
@@ -812,7 +844,13 @@ export default function ShipmentsPage() {
                       disabled={isUploadingDoc}
                       className="w-full h-12 rounded-xl border-dashed border-2 border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 gap-2 font-bold"
                     >
-                      {isUploadingDoc ? "⏳ جاري الرفع..." : <><Upload size={16} /> اختر ملف لرفعه</>}
+                      {isUploadingDoc ? (
+                        "⏳ جاري الرفع..."
+                      ) : (
+                        <>
+                          <Upload size={16} /> اختر ملف لرفعه
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -820,7 +858,10 @@ export default function ShipmentsPage() {
                 {/* List of uploaded documents in Form */}
                 <div className="space-y-3 mt-4">
                   {(docFields as any[]).map((doc, index: number) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group">
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group"
+                    >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
                           <FileText size={18} className="text-indigo-500" />
@@ -830,11 +871,18 @@ export default function ShipmentsPage() {
                             {doc.file_name || "مستند بدون اسم"}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <Badge variant="outline" className="text-[9px] py-0 px-1.5 rounded-full border-slate-100 font-bold">
-                              {DOCUMENT_TYPES.find(t => t.value === doc.document_type)?.label || doc.document_type}
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] py-0 px-1.5 rounded-full border-slate-100 font-bold"
+                            >
+                              {DOCUMENT_TYPES.find(
+                                (t) => t.value === doc.document_type,
+                              )?.label || doc.document_type}
                             </Badge>
                             {doc.document_number && (
-                              <span className="text-[10px] text-slate-400">#{doc.document_number}</span>
+                              <span className="text-[10px] text-slate-400">
+                                #{doc.document_number}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -856,9 +904,16 @@ export default function ShipmentsPage() {
                           onClick={async () => {
                             if (doc.dbId) {
                               // Existing doc in DB
-                              if (confirm("هل أنت متأكد من حذف هذا المستند نهائياً؟ سيتم حذفه من السيرفر أيضاً.")) {
+                              if (
+                                confirm(
+                                  "هل أنت متأكد من حذف هذا المستند نهائياً؟ سيتم حذفه من السيرفر أيضاً.",
+                                )
+                              ) {
                                 try {
-                                  await apiClient.deleteShipmentDocument(selectedShipment!.id, doc.dbId);
+                                  await apiClient.deleteShipmentDocument(
+                                    selectedShipment!.id,
+                                    doc.dbId,
+                                  );
                                   removeDoc(index);
                                   toast.success("تم حذف المستند بنجاح");
                                 } catch {
@@ -868,7 +923,9 @@ export default function ShipmentsPage() {
                             } else {
                               // New doc not yet in DB
                               if (doc.file_url) {
-                                await apiClient.deleteFromS3(doc.file_url).catch(console.error);
+                                await apiClient
+                                  .deleteFromS3(doc.file_url)
+                                  .catch(console.error);
                               }
                               removeDoc(index);
                               toast.success("تم إزالة المستند");
@@ -883,7 +940,9 @@ export default function ShipmentsPage() {
                   ))}
                   {docFields.length === 0 && (
                     <div className="text-center py-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-slate-300 text-xs font-bold italic">لا توجد مستندات مرفوعة بعد</p>
+                      <p className="text-slate-300 text-xs font-bold italic">
+                        لا توجد مستندات مرفوعة بعد
+                      </p>
                     </div>
                   )}
                 </div>
@@ -894,15 +953,18 @@ export default function ShipmentsPage() {
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-slate-900 flex items-center gap-2 text-lg">
-                  <Layers className="text-primary" size={20} /> تفاصيل الحاويات ({containerFields.length})
+                  <Layers className="text-primary" size={20} /> تفاصيل الحاويات
+                  ({containerFields.length})
                 </h3>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => appendContainer({ 
-                    container_number: "", 
-                    container_type: "40HC",
-                  })}
+                  onClick={() =>
+                    appendContainer({
+                      container_number: "",
+                      container_type: "40HC",
+                    })
+                  }
                   className="rounded-xl gap-2 font-bold h-10 px-4 border-primary/20 text-primary"
                 >
                   <PlusCircle size={16} /> إضافة حاوية
@@ -911,7 +973,10 @@ export default function ShipmentsPage() {
 
               <div className="space-y-4">
                 {containerFields.map((field, index) => (
-                  <Card key={field.id} className="p-5 border-slate-100 shadow-sm relative group bg-slate-50/50">
+                  <Card
+                    key={field.id}
+                    className="p-5 border-slate-100 shadow-sm relative group bg-slate-50/50"
+                  >
                     <Button
                       type="button"
                       variant="ghost"
@@ -923,55 +988,81 @@ export default function ShipmentsPage() {
                     </Button>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">رقم الحاوية *</Label>
-                        <Input 
-                          {...form.register(`containers.${index}.container_number`)}
+                        <Label className="text-[11px] font-black text-slate-500">
+                          رقم الحاوية *
+                        </Label>
+                        <Input
+                          {...form.register(
+                            `containers.${index}.container_number`,
+                          )}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                           placeholder="MSCU123..."
                         />
                       </div>
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">النوع</Label>
-                        <Input 
-                          {...form.register(`containers.${index}.container_type`)}
+                        <Label className="text-[11px] font-black text-slate-500">
+                          النوع
+                        </Label>
+                        <Input
+                          {...form.register(
+                            `containers.${index}.container_type`,
+                          )}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                         />
                       </div>
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">الوزن (طن)</Label>
-                        <Input 
+                        <Label className="text-[11px] font-black text-slate-500">
+                          الوزن (طن)
+                        </Label>
+                        <Input
                           type="number"
                           step="0.01"
-                          {...form.register(`containers.${index}.weight`, { valueAsNumber: true })}
+                          {...form.register(`containers.${index}.weight`, {
+                            valueAsNumber: true,
+                          })}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                         />
                       </div>
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">تاريخ إعادة الفارغ</Label>
-                        <Input 
+                        <Label className="text-[11px] font-black text-slate-500">
+                          تاريخ إعادة الفارغ
+                        </Label>
+                        <Input
                           type="date"
-                          {...form.register(`containers.${index}.empty_return_date`)}
+                          {...form.register(
+                            `containers.${index}.empty_return_date`,
+                          )}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                         />
                       </div>
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">البيان الجمركي</Label>
-                        <Input 
-                          {...form.register(`containers.${index}.customs_declaration_number`)}
+                        <Label className="text-[11px] font-black text-slate-500">
+                          البيان الجمركي
+                        </Label>
+                        <Input
+                          {...form.register(
+                            `containers.${index}.customs_declaration_number`,
+                          )}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                         />
                       </div>
                       <div className="space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">العدد</Label>
-                        <Input 
+                        <Label className="text-[11px] font-black text-slate-500">
+                          العدد
+                        </Label>
+                        <Input
                           type="number"
-                          {...form.register(`containers.${index}.item_count`, { valueAsNumber: true })}
+                          {...form.register(`containers.${index}.item_count`, {
+                            valueAsNumber: true,
+                          })}
                           className="h-10 rounded-xl bg-white border-none shadow-sm"
                         />
                       </div>
                       <div className="col-span-full space-y-1.5 text-right">
-                        <Label className="text-[11px] font-black text-slate-500">ملاحظات الحاوية</Label>
-                        <Input 
+                        <Label className="text-[11px] font-black text-slate-500">
+                          ملاحظات الحاوية
+                        </Label>
+                        <Input
                           {...form.register(`containers.${index}.notes`)}
                           className="h-10 rounded-xl bg-white border-none shadow-sm w-full"
                           placeholder="مثلاً: بضاعة قابلة للكسر..."
@@ -982,7 +1073,9 @@ export default function ShipmentsPage() {
                 ))}
                 {containerFields.length === 0 && (
                   <div className="text-center py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
-                    <p className="text-slate-400 font-bold italic">لم يتم إضافة حاويات بعد</p>
+                    <p className="text-slate-400 font-bold italic">
+                      لم يتم إضافة حاويات بعد
+                    </p>
                   </div>
                 )}
               </div>
@@ -1027,8 +1120,7 @@ export default function ShipmentsPage() {
           <DialogDescription className="font-bold text-slate-500 py-4">
             هل أنت متأكد من حذف الشحنة{" "}
             <strong>
-              {selectedShipment?.bl_number ||
-                `SH-${selectedShipment?.id}`}
+              {selectedShipment?.bl_number || `SH-${selectedShipment?.id}`}
             </strong>
             ؟ سيتم حذف جميع المستندات المرتبطة. هذا الإجراء لا يمكن التراجع عنه.
           </DialogDescription>
@@ -1049,7 +1141,6 @@ export default function ShipmentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

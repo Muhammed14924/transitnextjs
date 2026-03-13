@@ -98,6 +98,7 @@ model comp_items {
   // -- البيانات الأساسية --
   item_ar_name     String    @db.VarChar(100)
   item_en_name     String?   @db.VarChar(100)
+  manufacturer_code String?   @db.VarChar(100)
   price            Decimal?  @default(0.00) @db.Decimal(10, 2)
   weight           Decimal?  @default(0) @db.Decimal(10, 2)
   package          String?   @db.VarChar(50)

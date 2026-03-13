@@ -58,6 +58,7 @@ export default function CompanyItemsPage() {
     date_exp: "",
     GTIP: "",
     image: "",
+    manufacturer_code: "",
     ismain_item: true,
     main_item: "",
     isActive: true,
@@ -130,6 +131,7 @@ export default function CompanyItemsPage() {
         : "",
       GTIP: item.GTIP || "",
       image: item.image || "",
+      manufacturer_code: item.manufacturer_code || "",
     });
     setEditImageFile(null);
     setIsEditOpen(true);
@@ -265,6 +267,17 @@ export default function CompanyItemsPage() {
                     }
                     className="rounded-xl text-left"
                     dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">كود المنتج (المصنع)</Label>
+                  <Input
+                    value={addData.manufacturer_code}
+                    onChange={(e) =>
+                      setAddData({ ...addData, manufacturer_code: e.target.value })
+                    }
+                    className="rounded-xl"
+                    placeholder="Ref Code..."
                   />
                 </div>
                 <div className="space-y-2">
@@ -493,6 +506,16 @@ export default function CompanyItemsPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label className="font-bold">كود المنتج (المصنع)</Label>
+                <Input
+                  value={editData.manufacturer_code}
+                  onChange={(e) =>
+                    setEditData({ ...editData, manufacturer_code: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label className="font-bold">السعر</Label>
                 <Input
                   type="number"
@@ -681,6 +704,9 @@ export default function CompanyItemsPage() {
                     الاسم (أجنبي)
                   </TableHead>
                   <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                    كود المصنع
+                  </TableHead>
+                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
                     النوع
                   </TableHead>
                   <TableHead className="text-right font-bold py-4 whitespace-nowrap">
@@ -721,14 +747,14 @@ export default function CompanyItemsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={19} className="text-center py-8">
+                    <TableCell colSpan={20} className="text-center py-8">
                       جاري التحميل...
                     </TableCell>
                   </TableRow>
                 ) : data.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={19}
+                      colSpan={20}
                       className="text-center py-8 text-slate-500"
                     >
                       لا توجد أصناف
@@ -782,6 +808,9 @@ export default function CompanyItemsPage() {
                         dir="ltr"
                       >
                         {item.item_en_name || "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-blue-600 whitespace-nowrap">
+                        {item.manufacturer_code || "—"}
                       </TableCell>
                       <TableCell className="text-gray-600 whitespace-nowrap">
                         {item.typeofitems?.item_type || "—"}

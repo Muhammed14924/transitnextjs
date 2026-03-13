@@ -29,7 +29,7 @@ export async function PATCH(
     });
 
     return NextResponse.json(item);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Error updating company" },
       { status: 500 },
@@ -52,7 +52,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         error:

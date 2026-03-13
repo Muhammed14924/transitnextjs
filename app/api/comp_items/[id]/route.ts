@@ -27,6 +27,7 @@ export async function PATCH(
       date_exp,
       GTIP,
       image,
+      manufacturer_code,
     } = body;
 
     const updatedItem = await prisma.comp_items.update({
@@ -47,6 +48,8 @@ export async function PATCH(
             : undefined,
         GTIP: GTIP !== undefined ? (GTIP ? parseInt(GTIP) : null) : undefined,
         image: image !== undefined ? image || null : undefined,
+        manufacturer_code:
+          manufacturer_code !== undefined ? manufacturer_code || null : undefined,
         ismain_item: ismain_item !== undefined ? ismain_item : undefined,
         main_item: !ismain_item && main_item ? parseInt(main_item) : null,
         isActive: isActive !== undefined ? isActive : undefined,
@@ -54,7 +57,7 @@ export async function PATCH(
     });
 
     return NextResponse.json(updatedItem);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Error updating item" }, { status: 500 });
   }
 }
@@ -71,7 +74,7 @@ export async function DELETE(
     const { id } = await params;
     await prisma.comp_items.delete({ where: { id: Number(id) } });
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Cannot delete item. It has dependencies." },
       { status: 500 },

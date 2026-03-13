@@ -351,11 +351,11 @@ export default function GatesPage() {
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">المعابر الحدودية</h1>
+        <h1 className="text-2xl font-bold">المنافذ الحدودية</h1>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6">
-              <Plus size={16} /> إضافة معبر
+              <Plus size={16} /> إضافة منفذ
             </Button>
           </DialogTrigger>
           <DialogContent

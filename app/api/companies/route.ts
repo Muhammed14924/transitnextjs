@@ -8,7 +8,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(items);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Error fetching companies" },
       { status: 500 },
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       Sequence1 = parseInt(`${currentYearStr}00001`); // Start of the year
     }
 
-    let Sequence2 = Sequence1 + invoicesCount - 1;
+    const Sequence2 = Sequence1 + invoicesCount - 1;
 
     // Safety check: Prevent overflowing into Depot sequences (80000+)
     if (Sequence2 > maxSeqForYear) {
@@ -95,10 +95,11 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(item, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error creating company:", error);
+    const message = error instanceof Error ? error.message : "Error creating company";
     return NextResponse.json(
-      { error: "Error creating company" },
+      { error: message },
       { status: 500 },
     );
   }

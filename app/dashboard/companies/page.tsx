@@ -61,6 +61,7 @@ export default function CompaniesPage() {
     company_code: "",
     Sequence1: 0,
     Sequence2: 0,
+    first_internal_serial: 0,
     logo: "",
   });
   const [editLogoFile, setEditLogoFile] = useState<File | null>(null);
@@ -69,7 +70,7 @@ export default function CompaniesPage() {
     try {
       const res = await apiClient.getCompanies();
       setData(res || []);
-    } catch (e) {
+    } catch {
       toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
@@ -109,8 +110,9 @@ export default function CompaniesPage() {
       });
       setLogoFile(null);
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "خطأ في الإضافة أو تعارض في التسلسل");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "خطأ في الإضافة أو تعارض في التسلسل";
+      toast.error(message);
     }
   };
 
@@ -124,6 +126,7 @@ export default function CompaniesPage() {
       company_code: item.company_code,
       Sequence1: item.Sequence1,
       Sequence2: item.Sequence2,
+      first_internal_serial: item.first_internal_serial,
       logo: item.logo || "",
     });
     setEditLogoFile(null);
@@ -321,12 +324,18 @@ export default function CompaniesPage() {
                   {editData.company_code}
                 </p>
               </div>
-              <div className="bg-slate-50 p-2 rounded-lg text-center col-span-2">
+              <div className="bg-slate-50 p-2 rounded-lg text-center">
                 <p className="text-xs text-slate-500 mb-1">
                   مجال الفواتير المحجوز
                 </p>
                 <p className="font-mono font-bold text-sm text-primary">
                   {editData.Sequence1} - {editData.Sequence2}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-2 rounded-lg text-center">
+                <p className="text-xs text-slate-500 mb-1">تسلسل الأصناف</p>
+                <p className="font-mono font-bold text-sm text-emerald-600">
+                  {editData.first_internal_serial}
                 </p>
               </div>
             </div>
@@ -422,6 +431,9 @@ export default function CompaniesPage() {
             <TableHeader>
               <TableRow className="bg-gray-50/50">
                 <TableHead className="text-right font-bold py-4">
+                  #
+                </TableHead>
+                <TableHead className="text-right font-bold py-4">
                   الكود
                 </TableHead>
                 <TableHead className="text-right font-bold py-4">
@@ -429,6 +441,9 @@ export default function CompaniesPage() {
                 </TableHead>
                 <TableHead className="text-right font-bold py-4">
                   اسم الشركة
+                </TableHead>
+                <TableHead className="text-right font-bold py-4">
+                   الاسم (لاتيني)
                 </TableHead>
                 <TableHead className="text-right font-bold py-4">
                   الموقع
@@ -442,6 +457,12 @@ export default function CompaniesPage() {
                 <TableHead className="text-center font-bold py-4">
                   تسلسل الأصناف
                 </TableHead>
+                <TableHead className="text-center font-bold py-4">
+                  الحالة
+                </TableHead>
+                <TableHead className="text-center font-bold py-4">
+                  تاريخ الإضافة
+                </TableHead>
                 <TableHead className="text-center font-bold py-4 w-[100px]">
                   إجراءات
                 </TableHead>
@@ -450,14 +471,14 @@ export default function CompaniesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={12} className="text-center py-8">
                     جاري التحميل...
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={12}
                     className="text-center py-8 text-slate-500"
                   >
                     لا توجد شركات
@@ -466,6 +487,9 @@ export default function CompaniesPage() {
               ) : (
                 data.map((item: any) => (
                   <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs text-slate-400">
+                      {item.id}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -494,6 +518,9 @@ export default function CompaniesPage() {
                     <TableCell className="font-bold text-gray-900">
                       {item.company_name}
                     </TableCell>
+                    <TableCell className="text-gray-500 font-mono text-sm">
+                      {item.compen || "—"}
+                    </TableCell>
                     <TableCell className="text-gray-500">
                       {item.place || "—"}
                     </TableCell>
@@ -505,6 +532,20 @@ export default function CompaniesPage() {
                     </TableCell>
                     <TableCell className="text-center font-mono text-emerald-600 bg-emerald-50 rounded-lg">
                       {item.first_internal_serial}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {item.isActive ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                          نشط
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-500">
+                          غير نشط
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center text-xs text-slate-500 whitespace-nowrap">
+                      {item.createdAt ? new Date(item.createdAt).toLocaleDateString("ar-EG") : "—"}
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">

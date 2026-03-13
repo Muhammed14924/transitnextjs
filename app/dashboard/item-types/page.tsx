@@ -379,7 +379,8 @@ export default function ItemTypesPage() {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Layers className="text-primary" /> أنواع العناصر / الأصناف
+          <Layers className="text-primary" />
+          الأنواع الرئيسية للاصناف
         </h1>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
