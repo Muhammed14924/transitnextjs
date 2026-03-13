@@ -131,6 +131,7 @@ model comp_items {
 
   codes_tables     codes_tables[]
   material_codes   material_codes[]
+  container_items  container_items[]
 
   @@index([company_name])
   @@index([item_type])
@@ -351,18 +352,16 @@ model trans_2 {
 
 model transit_shipments {
   id                  Int       @id @default(autoincrement())
-  shipment_number     String?   @unique @db.VarChar(50) 
-  bl_number           String?   @unique @db.VarChar(50) 
+  bl_number           String    @unique @db.VarChar(50) 
   
   shipping_company    Int?      
   sender_company_id   Int?      
   port_of_loading     Int?      
   port_of_discharge   Int?      
   
-  total_containers    Int?      @default(0)
-  containers_numbers  String?   @db.Text
-  total_gross_weight  Decimal?  @db.Decimal(12, 2)
-  arrival_date        DateTime? @db.Date
+  arrival_date            DateTime? @db.Date
+  expected_discharge_date DateTime? @db.Date
+  free_time_days          Int?      @default(14)
   
   status              String    @default("PENDING") @db.VarChar(20)
   isActive            Boolean   @default(true)
@@ -375,6 +374,29 @@ model transit_shipments {
   discharge_port      ports?             @relation("DischargePort", fields: [port_of_discharge], references: [id])
   
   documents           shipment_documents[]
+  containers          shipment_containers[]
+}
+
+model shipment_containers {
+  id                         Int       @id @default(autoincrement())
+  shipment_id                Int
+  container_number           String    @db.VarChar(50)
+  container_type             String?   @db.VarChar(20) // e.g., '20', '40', '40HC'
+  weight                     Decimal?  @db.Decimal(12, 2)
+  empty_return_date          DateTime? @db.Date
+  customs_declaration_number String?   @db.VarChar(50) // Replaces old shipment_number
+  hs_code                    String?   @db.VarChar(50) // HS Code / GITP
+  
+  shipment                   transit_shipments @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  items                      container_items[]
+}
+
+model container_items {
+  id               Int       @id @default(autoincrement())
+  container_id     Int
+  comp_item_id     Int       
+  container        shipment_containers @relation(fields: [container_id], references: [id], onDelete: Cascade)
+  comp_item        comp_items          @relation(fields: [comp_item_id], references: [id])
 }
 
 model shipment_documents {

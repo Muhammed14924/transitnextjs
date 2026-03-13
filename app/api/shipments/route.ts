@@ -22,9 +22,7 @@ export async function GET(req: Request) {
         q
           ? {
               OR: [
-                { shipment_number: { contains: q, mode: "insensitive" } },
                 { bl_number: { contains: q, mode: "insensitive" } },
-                { containers_numbers: { contains: q, mode: "insensitive" } },
                 {
                   sender_company: {
                     company_name: { contains: q, mode: "insensitive" },
@@ -58,6 +56,7 @@ export async function GET(req: Request) {
             documents: {
               select: { id: true },
             },
+            containers: true,
           },
           orderBy: { createdAt: "desc" },
         }),
@@ -97,33 +96,51 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
+    if (!body.bl_number) {
+      return NextResponse.json({ error: "bl_number is required" }, { status: 400 });
+    }
+
     const shipment = await prisma.transit_shipments.create({
       data: {
-        shipment_number: body.shipment_number || null,
-        bl_number: body.bl_number || null,
-        shipping_company: body.shipping_company
-          ? parseInt(body.shipping_company)
-          : null,
-        sender_company_id: body.sender_company_id
-          ? parseInt(body.sender_company_id)
-          : null,
-        port_of_loading: body.port_of_loading
-          ? parseInt(body.port_of_loading)
-          : null,
-        port_of_discharge: body.port_of_discharge
-          ? parseInt(body.port_of_discharge)
-          : null,
-        total_containers: body.total_containers
-          ? parseInt(body.total_containers)
-          : 0,
-        containers_numbers: body.containers_numbers || null,
-        total_gross_weight: body.total_gross_weight
-          ? parseFloat(body.total_gross_weight)
-          : null,
+        bl_number: body.bl_number,
+        carrier: body.shipping_company ? { connect: { id: parseInt(body.shipping_company) } } : undefined,
+        sender_company: body.sender_company_id ? { connect: { id: parseInt(body.sender_company_id) } } : undefined,
+        loading_port: body.port_of_loading ? { connect: { id: parseInt(body.port_of_loading) } } : undefined,
+        discharge_port: body.port_of_discharge ? { connect: { id: parseInt(body.port_of_discharge) } } : undefined,
         arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,
+        expected_discharge_date: body.expected_discharge_date ? new Date(body.expected_discharge_date) : null,
+        free_time_days: body.free_time_days ? parseInt(body.free_time_days) : 14,
         status: body.status || "PENDING",
         isActive: body.isActive !== undefined ? body.isActive : true,
+        containers: body.containers && body.containers.length > 0 ? {
+          create: body.containers.map((c: any) => ({
+            container_number: c.container_number,
+            container_type: c.container_type || null,
+            weight: c.weight ? parseFloat(c.weight) : null,
+            empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null,
+            customs_declaration_number: c.customs_declaration_number || null,
+            hs_code: c.hs_code || null,
+            items: c.item_ids && c.item_ids.length > 0 ? {
+              create: c.item_ids.map((itemId: number) => ({
+                comp_item: { connect: { id: parseInt(itemId as any) } }
+              }))
+            } : undefined
+          }))
+        } : undefined,
+        documents: body.bl_document_url ? {
+          create: [{
+            document_type: 'BL',
+            file_url: body.bl_document_url,
+            file_name: body.bl_document_name || 'Bill of Lading',
+          }]
+        } : undefined
       },
+      include: {
+        containers: {
+          include: { items: true }
+        },
+        documents: true
+      }
     });
 
     return NextResponse.json(shipment);

@@ -27,6 +27,9 @@ export async function GET(
         discharge_port: true,
         carrier: true,
         documents: true,
+        containers: {
+          include: { items: true }
+        }
       },
     });
 
@@ -65,38 +68,47 @@ export async function PATCH(
 
     const body = await req.json();
 
+    // 1. Delete existing containers (if we want to replace them all for simplicity)
+    await prisma.shipment_containers.deleteMany({
+      where: { shipment_id: shipmentId }
+    });
+
     const updated = await prisma.transit_shipments.update({
       where: { id: shipmentId },
       data: {
-        shipment_number: body.shipment_number || undefined,
         bl_number: body.bl_number || undefined,
-        shipping_company: body.shipping_company
-          ? parseInt(body.shipping_company)
-          : undefined,
-        sender_company_id: body.sender_company_id
-          ? parseInt(body.sender_company_id)
-          : undefined,
-        port_of_loading: body.port_of_loading
-          ? parseInt(body.port_of_loading)
-          : undefined,
-        port_of_discharge: body.port_of_discharge
-          ? parseInt(body.port_of_discharge)
-          : undefined,
-        total_containers:
-          body.total_containers !== undefined
-            ? parseInt(body.total_containers)
-            : undefined,
-        containers_numbers: body.containers_numbers,
-        total_gross_weight:
-          body.total_gross_weight !== undefined
-            ? parseFloat(body.total_gross_weight)
-            : undefined,
-        arrival_date: body.arrival_date
-          ? new Date(body.arrival_date)
-          : undefined,
+        carrier: body.shipping_company ? { connect: { id: parseInt(body.shipping_company) } } : undefined,
+        sender_company: body.sender_company_id ? { connect: { id: parseInt(body.sender_company_id) } } : undefined,
+        loading_port: body.port_of_loading ? { connect: { id: parseInt(body.port_of_loading) } } : undefined,
+        discharge_port: body.port_of_discharge ? { connect: { id: parseInt(body.port_of_discharge) } } : undefined,
+        arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,
+        expected_discharge_date: body.expected_discharge_date ? new Date(body.expected_discharge_date) : null,
+        free_time_days: (body.free_time_days !== undefined && body.free_time_days !== null)
+          ? parseInt(body.free_time_days) 
+          : 14,
         status: body.status || undefined,
         isActive: body.isActive !== undefined ? body.isActive : undefined,
+        containers: body.containers && body.containers.length > 0 ? {
+          create: body.containers.map((c: any) => ({
+            container_number: c.container_number,
+            container_type: c.container_type || null,
+            weight: c.weight ? parseFloat(c.weight) : null,
+            empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null,
+            customs_declaration_number: c.customs_declaration_number || null,
+            hs_code: c.hs_code || null,
+            items: c.item_ids && c.item_ids.length > 0 ? {
+              create: c.item_ids.map((itemId: number) => ({
+                comp_item: { connect: { id: parseInt(itemId as any) } }
+              }))
+            } : undefined
+          }))
+        } : undefined,
       },
+      include: {
+        containers: {
+          include: { items: true }
+        }
+      }
     });
 
     return NextResponse.json(updated);

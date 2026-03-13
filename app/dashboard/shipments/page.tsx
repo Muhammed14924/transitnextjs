@@ -13,13 +13,18 @@ import {
   FileText,
   MapPin,
   Anchor,
-  Scale,
   Activity,
   Upload,
   Edit,
   Trash2,
   Ship,
+  X,
+  PlusCircle,
+  FileUp,
 } from "lucide-react";
+import { z } from "zod";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
   Table,
@@ -46,6 +51,50 @@ import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
 // ===================== Types =====================
+interface Container {
+  id: number;
+  container_number: string;
+  container_type?: string;
+  weight?: number;
+  empty_return_date?: string;
+  customs_declaration_number?: string;
+  hs_code?: string;
+  items?: { id: number; comp_item_id: number }[];
+}
+interface CompItem {
+  id: number;
+  item_ar_name: string;
+  composite_code?: string;
+}
+interface Shipment {
+  id: number;
+  bl_number: string;
+  status: string;
+  isActive?: boolean;
+  shipping_company?: number;
+  sender_company_id?: number;
+  port_of_loading?: number;
+  port_of_discharge?: number;
+  arrival_date?: string;
+  expected_discharge_date?: string;
+  free_time_days?: number;
+  createdAt: string;
+  sender_company?: { company_name: string };
+  loading_port?: { port_name: string; country?: string };
+  discharge_port?: { port_name: string; city?: string };
+  carrier?: { trans_name: string };
+  documents?: { id: number; file_url: string; file_name: string; document_type: string }[];
+  containers?: Container[];
+}
+
+interface ShipmentDoc {
+  id: number;
+  file_name: string;
+  file_url: string;
+  document_type: string;
+  document_number?: string;
+  createdAt: string;
+}
 interface ShipmentCompany {
   id: number;
   company_name?: string;
@@ -60,35 +109,35 @@ interface ShippingComp {
   id: number;
   trans_name: string;
 }
-interface ShipmentDoc {
-  id: number;
-  file_name: string;
-  file_url: string;
-  document_type: string;
-  document_number?: string;
-  createdAt: string;
-}
-interface Shipment {
-  id: number;
-  shipment_number?: string;
-  bl_number?: string;
-  status: string;
-  isActive?: boolean;
-  shipping_company?: number;
-  sender_company_id?: number;
-  port_of_loading?: number;
-  port_of_discharge?: number;
-  total_containers?: number;
-  containers_numbers?: string;
-  total_gross_weight?: number;
-  arrival_date?: string;
-  createdAt: string;
-  sender_company?: { company_name: string };
-  loading_port?: { port_name: string; country?: string };
-  discharge_port?: { port_name: string; city?: string };
-  carrier?: { trans_name: string };
-  documents?: { id: number }[];
-}
+
+// ===================== Schema & Defaults =====================
+const containerSchema = z.object({
+  container_number: z.string().min(1, "رقم الحاوية مطلوب"),
+  container_type: z.string().optional(),
+  weight: z.number().optional(),
+  empty_return_date: z.string().optional(),
+  customs_declaration_number: z.string().optional(),
+  hs_code: z.string().optional(),
+  item_ids: z.array(z.number()).default([]),
+});
+
+const shipmentSchema = z.object({
+  bl_number: z.string().min(1, "رقم البوليصة مطلوب"),
+  status: z.string().min(1, "الحالة مطلوبة"),
+  shipping_company: z.string().optional().nullable(),
+  sender_company_id: z.string().optional().nullable(),
+  port_of_loading: z.string().optional().nullable(),
+  port_of_discharge: z.string().optional().nullable(),
+  arrival_date: z.string().optional().nullable(),
+  expected_discharge_date: z.string().optional().nullable(),
+  free_time_days: z.number().int().min(0).default(14),
+  isActive: z.boolean().default(true),
+  containers: z.array(containerSchema).default([]),
+  bl_document_url: z.string().optional().nullable(),
+  bl_document_name: z.string().optional().nullable(),
+});
+
+type ShipmentFormValues = any;
 
 // ===================== Document types list =====================
 const DOCUMENT_TYPES = [
@@ -128,20 +177,34 @@ export default function ShipmentsPage() {
   const [companies, setCompanies] = useState<ShipmentCompany[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [shippingComps, setShippingComps] = useState<ShippingComp[]>([]);
+  const [compItems, setCompItems] = useState<CompItem[]>([]);
+  
+  const [isUploadingBL, setIsUploadingBL] = useState(false);
 
-  const [formData, setFormData] = useState({
-    shipment_number: "",
-    bl_number: "",
-    status: "PENDING",
-    shipping_company: "",
-    sender_company_id: "",
-    port_of_loading: "",
-    port_of_discharge: "",
-    total_containers: 0,
-    total_gross_weight: 0,
-    containers_numbers: "",
-    arrival_date: "",
-    isActive: true,
+  const form = useForm<any>({
+    resolver: zodResolver(shipmentSchema),
+    defaultValues: {
+      bl_number: "",
+      status: "PENDING",
+      free_time_days: 14,
+      isActive: true,
+      containers: [],
+    },
+  });
+
+  const resetForm = useCallback(() => {
+    form.reset({
+      bl_number: "",
+      status: "PENDING",
+      free_time_days: 14,
+      isActive: true,
+      containers: [],
+    });
+  }, [form]);
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "containers",
   });
 
   // ===================== Fetch Data =====================
@@ -166,15 +229,16 @@ export default function ShipmentsPage() {
 
   const fetchMasterData = async () => {
     try {
-      const [comps, pts, shipComps] = await Promise.all([
+      const [comps, pts, shipComps, items] = await Promise.all([
         apiClient.getCompanies(),
         apiClient.getPorts(),
         apiClient.getShippingCompanies(),
+        apiClient.getCompItems(),
       ]);
       if (comps) setCompanies(Array.isArray(comps) ? comps : []);
       if (pts) setPorts(Array.isArray(pts) ? pts : []);
-      if (shipComps)
-        setShippingComps(Array.isArray(shipComps) ? shipComps : []);
+      if (shipComps) setShippingComps(Array.isArray(shipComps) ? shipComps : []);
+      if (items) setCompItems(Array.isArray(items) ? items : []);
     } catch (e) {
       console.error("Master data fetch error", e);
     }
@@ -186,58 +250,22 @@ export default function ShipmentsPage() {
   }, [fetchShipments]);
 
   // ===================== CRUD Handlers =====================
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: any) => {
     try {
-      await apiClient.createShipment({
-        shipment_number: formData.shipment_number || undefined,
-        bl_number: formData.bl_number || undefined,
-        status: formData.status,
-        shipping_company: formData.shipping_company || undefined,
-        sender_company_id: formData.sender_company_id || undefined,
-        port_of_loading: formData.port_of_loading || undefined,
-        port_of_discharge: formData.port_of_discharge || undefined,
-        total_containers: Number(formData.total_containers),
-        total_gross_weight: Number(formData.total_gross_weight),
-        containers_numbers: formData.containers_numbers || undefined,
-        arrival_date: formData.arrival_date || undefined,
-        isActive: formData.isActive,
-      });
+      if (isEditDialogOpen && selectedShipment) {
+        await apiClient.updateShipment(selectedShipment.id, values);
+        toast.success("تم تحديث بيانات الشحنة");
+      } else {
+        await apiClient.createShipment(values);
+        toast.success("تم تسجيل الشحنة بنجاح");
+      }
       setIsAddDialogOpen(false);
-      resetForm();
-      fetchShipments();
-      toast.success("تم تسجيل الشحنة بنجاح");
-    } catch (error) {
-      console.error("Error creating shipment", error);
-      toast.error("حدث خطأ أثناء الإضافة: " + (error as Error).message);
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedShipment) return;
-    try {
-      await apiClient.updateShipment(selectedShipment.id, {
-        shipment_number: formData.shipment_number || undefined,
-        bl_number: formData.bl_number || undefined,
-        status: formData.status,
-        shipping_company: formData.shipping_company || undefined,
-        sender_company_id: formData.sender_company_id || undefined,
-        port_of_loading: formData.port_of_loading || undefined,
-        port_of_discharge: formData.port_of_discharge || undefined,
-        total_containers: Number(formData.total_containers),
-        total_gross_weight: Number(formData.total_gross_weight),
-        containers_numbers: formData.containers_numbers || undefined,
-        arrival_date: formData.arrival_date || undefined,
-        isActive: formData.isActive,
-      });
       setIsEditDialogOpen(false);
-      resetForm();
+      form.reset();
       fetchShipments();
-      toast.success("تم تحديث بيانات الشحنة");
     } catch (error) {
-      console.error("Error updating shipment", error);
-      toast.error("حدث خطأ أثناء التحديث: " + (error as Error).message);
+      console.error("Error submitting shipment", error);
+      toast.error("حدث خطأ: " + (error as Error).message);
     }
   };
 
@@ -257,41 +285,46 @@ export default function ShipmentsPage() {
 
   const openEditDialog = (shipment: Shipment) => {
     setSelectedShipment(shipment);
-    setFormData({
-      shipment_number: shipment.shipment_number || "",
+    form.reset({
       bl_number: shipment.bl_number || "",
       status: shipment.status || "PENDING",
       shipping_company: (shipment.shipping_company || "").toString(),
       sender_company_id: (shipment.sender_company_id || "").toString(),
       port_of_loading: (shipment.port_of_loading || "").toString(),
       port_of_discharge: (shipment.port_of_discharge || "").toString(),
-      total_containers: shipment.total_containers || 0,
-      total_gross_weight: shipment.total_gross_weight || 0,
-      containers_numbers: shipment.containers_numbers || "",
-      arrival_date: shipment.arrival_date
-        ? new Date(shipment.arrival_date).toISOString().split("T")[0]
-        : "",
+      arrival_date: shipment.arrival_date ? new Date(shipment.arrival_date).toISOString().split("T")[0] : "",
+      expected_discharge_date: shipment.expected_discharge_date ? new Date(shipment.expected_discharge_date).toISOString().split("T")[0] : "",
+      free_time_days: shipment.free_time_days || 14,
       isActive: shipment.isActive !== false,
+      containers: shipment.containers?.map(c => ({
+        container_number: c.container_number,
+        container_type: c.container_type || "",
+        weight: c.weight ? Number(c.weight) : undefined,
+        empty_return_date: c.empty_return_date ? new Date(c.empty_return_date).toISOString().split("T")[0] : "",
+        customs_declaration_number: c.customs_declaration_number || "",
+        hs_code: c.hs_code || "",
+        item_ids: c.items?.map(i => i.comp_item_id) || [],
+      })) || [],
     });
     setIsEditDialogOpen(true);
   };
 
-  const resetForm = () => {
-    setFormData({
-      shipment_number: "",
-      bl_number: "",
-      status: "PENDING",
-      shipping_company: "",
-      sender_company_id: "",
-      port_of_loading: "",
-      port_of_discharge: "",
-      total_containers: 0,
-      total_gross_weight: 0,
-      containers_numbers: "",
-      arrival_date: "",
-      isActive: true,
-    });
-    setSelectedShipment(null);
+  const handleBLUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingBL(true);
+    try {
+      const res = await apiClient.uploadToS3(file);
+      if (res?.fileUrl) {
+        form.setValue("bl_document_url", res.fileUrl);
+        form.setValue("bl_document_name", file.name);
+        toast.success("تم رفع بوليصة الشحن بنجاح");
+      }
+    } catch {
+      toast.error("فشل رفع الملف");
+    } finally {
+      setIsUploadingBL(false);
+    }
   };
 
   const statusLabel = (s: string) => {
@@ -420,7 +453,7 @@ export default function ShipmentsPage() {
                     <TableCell className="px-8 py-4">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-black text-primary text-sm">
-                          {s.shipment_number || `SH-${s.id}`}
+                          {s.bl_number || `SH-${s.id}`}
                         </span>
                         {s.bl_number && (
                           <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
@@ -498,10 +531,7 @@ export default function ShipmentsPage() {
                         </Badge>
                         <div className="flex gap-3 text-[10px] font-bold text-slate-400">
                           <span className="flex items-center gap-0.5">
-                            <Layers size={10} /> {s.total_containers || 0} حاوية
-                          </span>
-                          <span className="flex items-center gap-0.5">
-                            <Scale size={10} /> {s.total_gross_weight || 0} T
+                            <Layers size={10} /> {(s.containers?.length) || 0} حاوية
                           </span>
                         </div>
                         {s.documents && s.documents.length > 0 && (
@@ -598,54 +628,32 @@ export default function ShipmentsPage() {
           </DialogHeader>
 
           <form
-            onSubmit={isEditDialogOpen ? handleUpdate : handleCreate}
+            onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6 pt-4"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* -- Shipment Number -- */}
-              <div className="space-y-2 text-right">
-                <Label className="font-bold text-slate-700 pr-1">
-                  رقم الشحنة (داخلي)
-                </Label>
-                <Input
-                  value={formData.shipment_number}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      shipment_number: e.target.value,
-                    })
-                  }
-                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
-                  placeholder="مثلاً: TR-2024-001"
-                />
-              </div>
               {/* -- BL Number -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  رقم البوليصة (BL Number)
+                  رقم البوليصة (BL Number) *
                 </Label>
                 <Input
-                  value={formData.bl_number}
-                  onChange={(e) =>
-                    setFormData({ ...formData, bl_number: e.target.value })
-                  }
+                  {...form.register("bl_number")}
                   className="rounded-2xl h-12 bg-slate-50 border-none px-5"
                   placeholder="MSCU123456..."
                 />
+                {form.formState.errors.bl_number && (
+                  <p className="text-rose-500 text-xs mt-1">{(form.formState.errors.bl_number.message as string)}</p>
+                )}
               </div>
+
               {/* -- Sender Company -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
                   الشركة المرسلة (Sender)
                 </Label>
                 <select
-                  value={formData.sender_company_id}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      sender_company_id: e.target.value,
-                    })
-                  }
+                  {...form.register("sender_company_id")}
                   className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
                 >
                   <option value="">اختر الشركة المرسلة...</option>
@@ -656,19 +664,14 @@ export default function ShipmentsPage() {
                   ))}
                 </select>
               </div>
+
               {/* -- Shipping Company (Carrier) -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
                   شركة الشحن (Carrier)
                 </Label>
                 <select
-                  value={formData.shipping_company}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      shipping_company: e.target.value,
-                    })
-                  }
+                  {...form.register("shipping_company")}
                   className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
                 >
                   <option value="">اختر شركة الشحن...</option>
@@ -679,150 +682,241 @@ export default function ShipmentsPage() {
                   ))}
                 </select>
               </div>
-              {/* -- Port Loading -- */}
+
+              {/* -- Port Loading & Discharge -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
                   ميناء التحميل (Loading)
                 </Label>
                 <select
-                  value={formData.port_of_loading}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      port_of_loading: e.target.value,
-                    })
-                  }
+                  {...form.register("port_of_loading")}
                   className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
                 >
                   <option value="">اختر ميناء التحميل...</option>
                   {ports.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.port_name}
-                      {p.country ? ` — ${p.country}` : ""}
+                      {p.port_name} {p.country ? `— ${p.country}` : ""}
                     </option>
                   ))}
                 </select>
               </div>
-              {/* -- Port Discharge -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
                   ميناء التفريغ (Discharge)
                 </Label>
                 <select
-                  value={formData.port_of_discharge}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      port_of_discharge: e.target.value,
-                    })
-                  }
+                  {...form.register("port_of_discharge")}
                   className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
                 >
                   <option value="">اختر ميناء التفريغ...</option>
                   {ports.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.port_name}
-                      {p.city ? ` — ${p.city}` : ""}
+                      {p.port_name} {p.city ? `— ${p.city}` : ""}
                     </option>
                   ))}
                 </select>
               </div>
-              {/* -- Status -- */}
-              <div className="space-y-2 text-right">
-                <Label className="font-bold text-slate-700 pr-1">الحالة</Label>
-                <select
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData({ ...formData, status: e.target.value })
-                  }
-                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
-                >
-                  <option value="PENDING">⏳ قيد الانتظار (PENDING)</option>
-                  <option value="IN_TRANSIT">🚢 في الطريق (IN TRANSIT)</option>
-                  <option value="ARRIVED">📍 وصلت (ARRIVED)</option>
-                  <option value="DELIVERED">✅ تم الاستلام (DELIVERED)</option>
-                </select>
-              </div>
-              {/* -- Arrival Date -- */}
+
+              {/* -- Dates & Free Time -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  تاريخ الوصول المتوقع
+                  وصول متوقع
                 </Label>
                 <Input
                   type="date"
-                  value={formData.arrival_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, arrival_date: e.target.value })
-                  }
+                  {...form.register("arrival_date")}
                   className="rounded-2xl h-12 bg-slate-50 border-none px-5"
                 />
               </div>
-              {/* -- Containers count & Weight -- */}
               <div className="space-y-2 text-right">
-                <Label className="font-bold text-slate-700 px-1 text-xs">
-                  عدد الحاويات
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={formData.total_containers}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      total_containers: Number(e.target.value),
-                    })
-                  }
-                  className="rounded-2xl h-12 bg-slate-50 border-none px-4"
-                />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label className="font-bold text-slate-700 px-1 text-xs">
-                  الوزن الإجمالي (طن)
-                </Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.total_gross_weight}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      total_gross_weight: Number(e.target.value),
-                    })
-                  }
-                  className="rounded-2xl h-12 bg-slate-50 border-none px-4"
-                />
-              </div>
-              {/* -- Container Numbers (full width) -- */}
-              <div className="col-span-1 md:col-span-2 space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  أرقام الحاويات (Container Numbers)
+                  تفريغ متوقع
                 </Label>
-                <textarea
-                  value={formData.containers_numbers}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      containers_numbers: e.target.value,
-                    })
-                  }
-                  className="w-full p-4 rounded-2xl bg-slate-50 border-none text-sm font-medium focus:ring-2 focus:ring-primary/20 min-h-[80px] resize-y"
-                  placeholder="MSKU0012345, MSCU9876543, TCLU4567890..."
+                <Input
+                  type="date"
+                  {...form.register("expected_discharge_date")}
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
                 />
               </div>
-              {/* isActive */}
-              <div className="col-span-1 md:col-span-2 flex items-center gap-3 text-right">
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  أيام العطل (Free Time)
+                </Label>
+                <Input
+                  type="number"
+                  {...form.register("free_time_days", { valueAsNumber: true })}
+                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
+                />
+              </div>
+
+              {/* -- Status & isActive -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">الحالة</Label>
+                <select
+                  {...form.register("status")}
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                >
+                  <option value="PENDING">⏳ قيد الانتظار</option>
+                  <option value="IN_TRANSIT">🚢 في الطريق</option>
+                  <option value="ARRIVED">📍 وصلت</option>
+                  <option value="DELIVERED">✅ تم الاستلام</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3 text-right mt-6">
                 <input
                   type="checkbox"
-                  checked={formData.isActive}
-                  onChange={(e) =>
-                    setFormData({ ...formData, isActive: e.target.checked })
-                  }
+                  {...form.register("isActive")}
                   className="h-5 w-5 rounded-lg accent-primary"
                 />
                 <Label className="font-bold text-slate-700">
-                  الشحنة نشطة (isActive)
+                  الشحنة نشطة
                 </Label>
+              </div>
+
+              {/* -- S3 BL Upload -- */}
+              <div className="col-span-1 md:col-span-2 space-y-2 text-right bg-blue-50/30 p-4 rounded-2xl border border-dashed border-blue-100">
+                <Label className="font-black text-blue-900 flex items-center gap-2">
+                  <FileUp size={16} /> رفع بوليصة الشحن (Bill of Lading)
+                </Label>
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-1">
+                    <input
+                      type="file"
+                      onChange={handleBLUpload}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                      disabled={isUploadingBL}
+                    />
+                    <Button
+                      type="button"
+                      disabled={isUploadingBL}
+                      className="w-full h-12 rounded-xl border-dashed border-2 border-primary/20 bg-white text-primary hover:bg-primary/5 gap-2 font-bold"
+                    >
+                      {isUploadingBL ? "جاري الرفع..." : "اختر ملف البوليصة..."}
+                    </Button>
+                  </div>
+                  {form.watch("bl_document_url") && (
+                    <Badge className="bg-emerald-50 text-emerald-600 border-none px-3 font-bold h-10 flex items-center gap-2">
+                      <CheckCircle2 size={14} /> تم الرفع
+                    </Badge>
+                  )}
+                </div>
+                {form.watch("bl_document_name") && (
+                  <p className="text-[10px] text-slate-400 font-bold mr-1">
+                    الملف: {form.watch("bl_document_name")}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* -- Containers Section -- */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-slate-900 flex items-center gap-2 text-lg">
+                  <Layers className="text-primary" size={20} /> تفاصيل الحاويات ({fields.length})
+                </h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => append({ 
+                    container_number: "", 
+                    container_type: "40HC",
+                    item_ids: []
+                  })}
+                  className="rounded-xl gap-2 font-bold h-10 px-4 border-primary/20 text-primary"
+                >
+                  <PlusCircle size={16} /> إضافة حاوية
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                {fields.map((field, index) => (
+                  <Card key={field.id} className="p-5 border-slate-100 shadow-sm relative group bg-slate-50/50">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => remove(index)}
+                      className="absolute top-2 left-2 text-slate-300 hover:text-rose-600 h-8 w-8"
+                    >
+                      <X size={16} />
+                    </Button>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">رقم الحاوية *</Label>
+                        <Input 
+                          {...form.register(`containers.${index}.container_number`)}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm"
+                          placeholder="MSCU123..."
+                        />
+                      </div>
+                      <div className="space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">النوع</Label>
+                        <Input 
+                          {...form.register(`containers.${index}.container_type`)}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">الوزن (طن)</Label>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          {...form.register(`containers.${index}.weight`, { valueAsNumber: true })}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">تاريخ إعادة الفارغ</Label>
+                        <Input 
+                          type="date"
+                          {...form.register(`containers.${index}.empty_return_date`)}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">البيان الجمركي</Label>
+                        <Input 
+                          {...form.register(`containers.${index}.customs_declaration_number`)}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">كود HS</Label>
+                        <Input 
+                          {...form.register(`containers.${index}.hs_code`)}
+                          className="h-10 rounded-xl bg-white border-none shadow-sm"
+                        />
+                      </div>
+                      <div className="col-span-full space-y-1.5 text-right">
+                        <Label className="text-[11px] font-black text-slate-500">الأصناف (Items)</Label>
+                        <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-white border border-slate-100 min-h-[44px]">
+                          {compItems.length > 0 ? (
+                            <select
+                              multiple
+                              className="w-full text-xs font-bold border-none outline-none min-h-[100px]"
+                              value={form.watch(`containers.${index}.item_ids`)?.map(String) || []}
+                              onChange={(e) => {
+                                const vals = Array.from(e.target.selectedOptions, (option) => Number(option.value));
+                                form.setValue(`containers.${index}.item_ids`, vals);
+                              }}
+                            >
+                              {compItems.map(item => (
+                                <option key={item.id} value={item.id}>{item.item_ar_name} ({item.composite_code})</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="text-[10px] text-slate-300 italic">جاري تحميل الأصناف...</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+                {fields.length === 0 && (
+                  <div className="text-center py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
+                    <p className="text-slate-400 font-bold italic">لم يتم إضافة حاويات بعد</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -839,7 +933,7 @@ export default function ShipmentsPage() {
                 onClick={() => {
                   setIsAddDialogOpen(false);
                   setIsEditDialogOpen(false);
-                  resetForm();
+                  form.reset();
                 }}
                 className="rounded-2xl h-14 px-8 font-bold text-slate-400 hover:bg-slate-50"
               >
@@ -865,7 +959,7 @@ export default function ShipmentsPage() {
           <DialogDescription className="font-bold text-slate-500 py-4">
             هل أنت متأكد من حذف الشحنة{" "}
             <strong>
-              {selectedShipment?.shipment_number ||
+              {selectedShipment?.bl_number ||
                 `SH-${selectedShipment?.id}`}
             </strong>
             ؟ سيتم حذف جميع المستندات المرتبطة. هذا الإجراء لا يمكن التراجع عنه.
@@ -976,7 +1070,7 @@ function DocumentsDialog({
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-right flex items-center gap-2">
             <FileText className="text-primary" size={20} />
-            مستندات الشحنة: {shipment?.shipment_number || `SH-${shipment?.id}`}
+            مستندات الشحنة: {shipment?.bl_number || `SH-${shipment?.id}`}
           </DialogTitle>
           <DialogDescription className="text-right">
             عرض ورفع المستندات المرفقة بهذه الشحنة (بوليصة، فاتورة، بيان جمركي،
