@@ -163,6 +163,19 @@ model companies {
   comp_items            comp_items[]
   trans_2               trans_2[]
   transit_shipments     transit_shipments[]
+  sub_companies         sub_companies[]
+}
+
+model sub_companies {
+  id                Int       @id @default(autoincrement())
+  sub_company_name  String    @db.VarChar(100)
+  company_id        Int
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  company           companies @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  shipments         transit_shipments[]
 }
 
 // model depots {
@@ -179,6 +192,10 @@ model depots {
   manager_name   String?   @db.VarChar(50)
   contact_number String?   @db.VarChar(20)
   
+  // -- حقل ربط المستودع بتاجر معين --
+  traderId       Int?      // معرف التاجر التابع له المستودع
+  trader         traders?  @relation(fields: [traderId], references: [id], onDelete: SetNull)
+  
   // -- حقول التسلسل المالي (مولدة آلياً) --
   Sequence1      Int?      // بداية تسلسل فواتير المستودع (مثال: 2680001)
   Sequence2      Int?      // نهاية التسلسل (مثال: 2681000)
@@ -186,6 +203,8 @@ model depots {
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([traderId])
 }
 
 // model destination {
@@ -326,6 +345,7 @@ model traders {
   // shipments    shipments[]
   // invoices     invoices[]
   trans_2     trans_2[]
+  depots     depots[]
 }
 
 model trans_2 {
@@ -370,6 +390,8 @@ model transit_shipments {
 
   carrier             transport_company? @relation(fields: [shipping_company], references: [id])
   sender_company      companies?         @relation(fields: [sender_company_id], references: [id])
+  sub_company_id      Int?
+  sub_company         sub_companies?     @relation(fields: [sub_company_id], references: [id])
   loading_port        ports?             @relation("LoadingPort", fields: [port_of_loading], references: [id])
   discharge_port      ports?             @relation("DischargePort", fields: [port_of_discharge], references: [id])
   

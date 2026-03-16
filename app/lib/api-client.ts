@@ -70,7 +70,7 @@ class ApiClient {
     return this.request(`/api/shipments?${searchParams.toString()}`);
   }
 
-  async createShipment(data: any) {
+  async createShipment(data: Record<string, unknown>) {
     return this.request("/api/shipments", {
       method: "POST",
       body: JSON.stringify(data),
@@ -81,7 +81,7 @@ class ApiClient {
     return this.request(`/api/shipments/${id}`);
   }
 
-  async updateShipment(id: number | string, data: any) {
+  async updateShipment(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/shipments/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -92,7 +92,7 @@ class ApiClient {
     return this.request(`/api/shipments/${shipmentId}/documents`);
   }
 
-  async createShipmentDocument(shipmentId: number | string, data: any) {
+  async createShipmentDocument(shipmentId: number | string, data: Record<string, unknown>) {
     return this.request(`/api/shipments/${shipmentId}/documents`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -454,6 +454,29 @@ class ApiClient {
   }
   deleteUnit(id: number) {
     return this.request(`/api/units/${id}`, { method: "DELETE" });
+  }
+
+  // --- Sub-Companies ---
+  getSubCompanies(companyId?: number | string) {
+    const url = companyId
+      ? `/api/sub-companies?companyId=${companyId}`
+      : "/api/sub-companies";
+    return this.request(url);
+  }
+  createSubCompany(data: any) {
+    return this.request("/api/sub-companies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateSubCompany(id: number | string, data: any) {
+    return this.request(`/api/sub-companies/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteSubCompany(id: number | string) {
+    return this.request(`/api/sub-companies/${id}`, { method: "DELETE" });
   }
 }
 

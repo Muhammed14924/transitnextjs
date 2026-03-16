@@ -68,6 +68,7 @@ interface Shipment {
   isActive?: boolean;
   shipping_company?: number;
   sender_company_id?: number;
+  sub_company_id?: number;
   port_of_loading?: number;
   port_of_discharge?: number;
   arrival_date?: string;
@@ -78,6 +79,7 @@ interface Shipment {
   loading_port?: { port_name: string; country?: string };
   discharge_port?: { port_name: string; city?: string };
   carrier?: { trans_name: string };
+  sub_company?: { sub_company_name: string };
   documents?: {
     id: number;
     file_url: string;
@@ -102,6 +104,11 @@ interface ShippingComp {
   id: number;
   trans_name: string;
 }
+interface SubCompany {
+  id: number;
+  sub_company_name: string;
+  company_id: number;
+}
 
 // ===================== Schema & Defaults =====================
 const containerSchema = z.object({
@@ -119,6 +126,7 @@ const shipmentSchema = z.object({
   status: z.string().min(1, "الحالة مطلوبة"),
   shipping_company: z.string().optional().nullable(),
   sender_company_id: z.string().optional().nullable(),
+  sub_company_id: z.string().optional().nullable(),
   port_of_loading: z.string().optional().nullable(),
   port_of_discharge: z.string().optional().nullable(),
   arrival_date: z.string().optional().nullable(),
@@ -175,7 +183,7 @@ export default function ShipmentsPage() {
   const [companies, setCompanies] = useState<ShipmentCompany[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [shippingComps, setShippingComps] = useState<ShippingComp[]>([]);
-  // const [compItems, setCompItems] = useState<CompItem[]>([]);
+  const [subCompanies, setSubCompanies] = useState<SubCompany[]>([]);
 
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
@@ -242,15 +250,18 @@ export default function ShipmentsPage() {
 
   const fetchMasterData = async () => {
     try {
-      const [comps, pts, shipComps] = await Promise.all([
+      const [comps, pts, shipComps, subComps] = await Promise.all([
         apiClient.getCompanies(),
         apiClient.getPorts(),
         apiClient.getShippingCompanies(),
+        apiClient.getSubCompanies(),
       ]);
       if (comps) setCompanies(Array.isArray(comps) ? comps : []);
       if (pts) setPorts(Array.isArray(pts) ? pts : []);
       if (shipComps)
         setShippingComps(Array.isArray(shipComps) ? shipComps : []);
+      if (subComps)
+        setSubCompanies(Array.isArray(subComps) ? subComps : []);
     } catch (e) {
       console.error("Master data fetch error", e);
     }
@@ -302,6 +313,7 @@ export default function ShipmentsPage() {
       status: shipment.status || "PENDING",
       shipping_company: (shipment.shipping_company || "").toString(),
       sender_company_id: (shipment.sender_company_id || "").toString(),
+      sub_company_id: (shipment.sub_company_id || "").toString(),
       port_of_loading: (shipment.port_of_loading || "").toString(),
       port_of_discharge: (shipment.port_of_discharge || "").toString(),
       arrival_date: shipment.arrival_date
@@ -511,6 +523,11 @@ export default function ShipmentsPage() {
                             <span className="font-bold text-slate-800 text-xs">
                               {s.sender_company?.company_name || "---"}
                             </span>
+                            {s.sub_company && (
+                              <span className="text-[10px] text-blue-600 font-bold">
+                                ({s.sub_company.sub_company_name})
+                              </span>
+                            )}
                             <span className="text-[9px] text-slate-400">
                               المرسل
                             </span>
@@ -677,18 +694,43 @@ export default function ShipmentsPage() {
               {/* -- Sender Company -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  الشركة المرسلة (Sender)
+                  الشركة المصدرة (Exporter)
                 </Label>
                 <select
                   {...form.register("sender_company_id")}
                   className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
                 >
-                  <option value="">اختر الشركة المرسلة...</option>
+                  <option value="">اختر الشركة المصدرة...</option>
                   {companies.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.company_name}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              {/* -- Sub Company -- */}
+              <div className="space-y-2 text-right">
+                <Label className="font-bold text-slate-700 pr-1">
+                  تخريج الفاتورة باسم (Sub Company)
+                </Label>
+                <select
+                  {...form.register("sub_company_id")}
+                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                >
+                  <option value="">اختر الشركة الفرعية...</option>
+                  {subCompanies
+                    .filter(
+                      (sc) =>
+                        !form.watch("sender_company_id") ||
+                        sc.company_id.toString() ===
+                          form.watch("sender_company_id"),
+                    )
+                    .map((sc) => (
+                      <option key={sc.id} value={sc.id}>
+                        {sc.sub_company_name}
+                      </option>
+                    ))}
                 </select>
               </div>
 

@@ -34,6 +34,7 @@ export async function GET(
       where: { id: shipmentId },
       include: {
         sender_company: true,
+        sub_company: true,
         loading_port: true,
         discharge_port: true,
         carrier: true,
@@ -131,6 +132,7 @@ export async function PATCH(
         bl_number: body.bl_number || undefined,
         carrier: body.shipping_company ? { connect: { id: parseInt(body.shipping_company) } } : undefined,
         sender_company: body.sender_company_id ? { connect: { id: parseInt(body.sender_company_id) } } : undefined,
+        sub_company: body.sub_company_id ? { connect: { id: parseInt(body.sub_company_id) } } : undefined,
         loading_port: body.port_of_loading ? { connect: { id: parseInt(body.port_of_loading) } } : undefined,
         discharge_port: body.port_of_discharge ? { connect: { id: parseInt(body.port_of_discharge) } } : undefined,
         arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,

@@ -16,6 +16,7 @@ import {
   X,
   MapPin,
   Package,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
@@ -24,6 +25,7 @@ const navItems = [
   { name: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
   { name: "إدارة النقل البحري", href: "/dashboard/shipments", icon: Truck },
   { name: "إدارة الشركات", href: "/dashboard/companies", icon: Building2 },
+  { name: "الشركات الفرعية", href: "/dashboard/sub-companies", icon: GitBranch },
   { name: "بيانات النقل", href: "/dashboard/transport", icon: ShipWheel },
   { name: "التجار", href: "/dashboard/traders", icon: UserCheck },
   { name: "المستودعات", href: "/dashboard/depots", icon: Building2 },

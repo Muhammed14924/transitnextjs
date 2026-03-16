@@ -38,10 +38,10 @@ import { getCurrentUser } from "@/app/lib/auth";
 export async function GET() {
   try {
     const items = await prisma.gates.findMany({
-      orderBy: { createdAt: "desc" }, // عرض الأحدث أولاً
+      orderBy: { createdAt: "asc" }, // الترتيب تصاعدي حسب التاريخ
     });
     return NextResponse.json(items);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Error fetching gates" },
       { status: 500 },

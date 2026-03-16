@@ -38,10 +38,10 @@ import { getCurrentUser } from "@/app/lib/auth";
 export async function GET() {
   try {
     const items = await prisma.ports.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
     return NextResponse.json(items);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Error fetching ports" },
       { status: 500 },

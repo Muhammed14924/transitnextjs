@@ -13,30 +13,21 @@ export async function PATCH(
 
     const body = await req.json();
     const { id } = await params;
+    const { sub_company_name, company_id, isActive } = body;
 
-    // Do NOT allow updating Sequence1, Sequence2, or depot_code
-    const { depot_name, location, manager_name, contact_number, isActive, traderId } =
-      body;
-
-    const item = await prisma.depots.update({
+    const item = await prisma.sub_companies.update({
       where: { id: Number(id) },
       data: {
-        depot_name,
-        location: location || null,
-        manager_name: manager_name || null,
-        contact_number: contact_number || null,
-        traderId: traderId ? parseInt(traderId) : null,
-        isActive: isActive !== undefined ? isActive : true,
-      },
-      include: {
-        trader: true,
+        sub_company_name: sub_company_name || undefined,
+        company_id: company_id ? parseInt(company_id) : undefined,
+        isActive: isActive !== undefined ? isActive : undefined,
       },
     });
 
     return NextResponse.json(item);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { error: "Error updating depot" },
+      { error: "Error updating sub-company" },
       { status: 500 },
     );
   }
@@ -52,15 +43,14 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-
-    await prisma.depots.delete({
+    await prisma.sub_companies.delete({
       where: { id: Number(id) },
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { error: "Cannot delete depot." },
+      { error: "Cannot delete sub-company. It may have linked shipments." },
       { status: 500 },
     );
   }

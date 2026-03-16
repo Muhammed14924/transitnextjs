@@ -28,6 +28,7 @@ import { toast } from "sonner";
 export default function DepotsPage() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [traders, setTraders] = useState<any[]>([]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addData, setAddData] = useState({
@@ -37,6 +38,7 @@ export default function DepotsPage() {
     contact_number: "",
     expected_invoices: 1000,
     isActive: true,
+    traderId: null as number | null,
   });
 
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -50,12 +52,17 @@ export default function DepotsPage() {
     isActive: true,
     Sequence1: 0,
     Sequence2: 0,
+    traderId: null as number | null,
   });
 
   const fetchData = async () => {
     try {
-      const res = await apiClient.getDepots();
-      setData(res || []);
+      const [depotsRes, tradersRes] = await Promise.all([
+        apiClient.getDepots(),
+        apiClient.getTraders()
+      ]);
+      setData(depotsRes || []);
+      setTraders(tradersRes || []);
     } catch (e) {
       toast.error("فشل جلب البيانات");
     } finally {
@@ -96,6 +103,7 @@ export default function DepotsPage() {
         contact_number: "",
         expected_invoices: 1000,
         isActive: true,
+        traderId: null,
       });
       fetchData();
     } catch (e: any) {
@@ -114,6 +122,7 @@ export default function DepotsPage() {
       isActive: item.isActive !== undefined ? item.isActive : true,
       Sequence1: item.Sequence1,
       Sequence2: item.Sequence2,
+      traderId: item.traderId || null,
     });
     setIsEditOpen(true);
   };
@@ -202,6 +211,27 @@ export default function DepotsPage() {
                   className="rounded-xl text-left"
                   dir="ltr"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold">التاجر التابع له</Label>
+                <select
+                  value={addData.traderId || ""}
+                  onChange={(e) =>
+                    setAddData({
+                      ...addData,
+                      traderId: e.target.value ? parseInt(e.target.value) : null,
+                    })
+                  }
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">-- اختر التاجر --</option>
+                  {traders.map((trader: any) => (
+                    <option key={trader.id} value={trader.id}>
+                      {trader.trader_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl space-y-3">
@@ -317,6 +347,27 @@ export default function DepotsPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label className="font-bold">التاجر التابع له</Label>
+              <select
+                value={editData.traderId || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    traderId: e.target.value ? parseInt(e.target.value) : null,
+                  })
+                }
+                className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">-- اختر التاجر --</option>
+                {traders.map((trader: any) => (
+                  <option key={trader.id} value={trader.id}>
+                    {trader.trader_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex items-center gap-2 pt-2">
               <input
                 type="checkbox"
@@ -356,6 +407,9 @@ export default function DepotsPage() {
                 <TableHead className="text-right font-bold py-4">
                   اسم المستودع
                 </TableHead>
+                <TableHead className="text-right font-bold py-4">
+                  التاجر
+                </TableHead>
                 <TableHead className="text-center font-bold py-4">
                   بداية التسلسل
                 </TableHead>
@@ -373,14 +427,14 @@ export default function DepotsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     جاري التحميل...
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-8 text-slate-500"
                   >
                     لا توجد بيانات
@@ -399,6 +453,15 @@ export default function DepotsPage() {
                     </TableCell>
                     <TableCell className="font-bold text-gray-900">
                       {item.depot_name}
+                    </TableCell>
+                    <TableCell>
+                      {item.trader ? (
+                        <Badge className="bg-blue-50 text-blue-600 border-blue-200">
+                          {item.trader.trader_name}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center font-mono text-emerald-700 font-medium">
                       {item.Sequence1 || "—"}

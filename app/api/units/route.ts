@@ -5,10 +5,10 @@ import { getCurrentUser } from "@/app/lib/auth";
 export async function GET() {
   try {
     const items = await prisma.units.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
     return NextResponse.json(items);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Error fetching units" },
       { status: 500 },
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(item, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Error creating unit" }, { status: 500 });
   }
 }

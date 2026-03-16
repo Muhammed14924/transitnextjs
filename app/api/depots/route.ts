@@ -6,6 +6,9 @@ export async function GET() {
   try {
     const items = await prisma.depots.findMany({
       orderBy: { createdAt: "desc" },
+      include: {
+        trader: true,
+      },
     });
     return NextResponse.json(items);
   } catch (error) {
@@ -31,6 +34,7 @@ export async function POST(req: Request) {
       contact_number,
       expected_invoices,
       isActive,
+      traderId,
     } = body;
 
     const invoicesCount = parseInt(expected_invoices) || 1000;
@@ -86,9 +90,13 @@ export async function POST(req: Request) {
         location: location || null,
         manager_name: manager_name || null,
         contact_number: contact_number || null,
+        traderId: traderId ? parseInt(traderId) : null,
         Sequence1,
         Sequence2,
         isActive: isActive !== undefined ? isActive : true,
+      },
+      include: {
+        trader: true,
       },
     });
 
