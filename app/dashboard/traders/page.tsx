@@ -210,12 +210,15 @@ export default function TradersPage() {
   };
 
   // فلترة البيانات بناءً على البحث
-  const filteredData = data.filter(
-    (item) =>
-      item.trader_name?.includes(searchQuery) ||
-      item.trader_code?.includes(searchQuery) ||
-      item.contact_person?.includes(searchQuery),
-  );
+  const filteredData = data.filter((item) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      item.trader_name?.toLowerCase().includes(query) ||
+      item.trader_code?.toLowerCase().includes(query) ||
+      item.contact_person?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="space-y-6 pb-20">

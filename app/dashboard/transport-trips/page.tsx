@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -9,14 +9,11 @@ import {
   Search,
   Truck,
   Calendar,
-  Edit,
   Trash2,
   ChevronDown,
   ChevronUp,
   Package,
   User,
-  MapPin,
-  Building,
   X,
   Save,
   Loader2,
@@ -211,7 +208,6 @@ export default function TransportTripsPage() {
     control,
     handleSubmit,
     reset,
-    formState: { errors },
   } = useForm<TripFormData>({
     resolver: zodResolver(tripSchema),
     defaultValues: {
@@ -1027,15 +1023,19 @@ export default function TransportTripsPage() {
                 </TableRow>
               ) : (
                 trips
-                  .filter(
-                    (trip) =>
-                      trip.trip_number?.includes(searchTerm) ||
-                      trip.driver_name?.includes(searchTerm) ||
-                      trip.plate_front?.includes(searchTerm),
-                  )
+                  .filter((trip) => {
+                    if (!searchTerm) return true;
+                    const search = searchTerm.toLowerCase();
+                    return (
+                      trip.trip_number?.toLowerCase().includes(search) ||
+                      trip.driver_name?.toLowerCase().includes(search) ||
+                      trip.plate_front?.toLowerCase().includes(search) ||
+                      trip.plate_back?.toLowerCase().includes(search)
+                    );
+                  })
                   .map((trip) => (
-                    <>
-                      <TableRow key={trip.id} className="hover:bg-slate-50">
+                    <React.Fragment key={trip.id}>
+                      <TableRow className="hover:bg-slate-50">
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -1232,7 +1232,7 @@ export default function TransportTripsPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   ))
               )}
             </TableBody>
