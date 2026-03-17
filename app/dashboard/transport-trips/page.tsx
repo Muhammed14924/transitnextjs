@@ -20,6 +20,7 @@ import {
   FileUp,
   FileText,
   Upload,
+  Edit,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
@@ -181,6 +182,8 @@ export default function TransportTripsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState<TransportTrip | null>(null);
   const [expandedTrip, setExpandedTrip] = useState<number | null>(null);
 
   const [selectedDocType, setSelectedDocType] = useState("البيان الجمركي");
@@ -202,6 +205,23 @@ export default function TransportTripsPage() {
   >([]);
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    trip_number: "",
+    loading_date: "",
+    driver_name: "",
+    driver_phone: "",
+    plate_front: "",
+    plate_back: "",
+    gate_id: "",
+    transport_company_id: "",
+    sort_num: "",
+    discharge_date: "",
+    truck_fare: "",
+    notes: "",
+    status: "DISPATCHED",
+  });
 
   const {
     register,
@@ -292,13 +312,13 @@ export default function TransportTripsPage() {
       try {
         const shipments = await apiClient.getShipments({ limit: 100 });
         const allContainers: Container[] = [];
-        shipments?.forEach((shipment: any) => {
+        shipments?.forEach((shipment: { containers?: Container[] }) => {
           if (shipment.containers) {
             allContainers.push(...shipment.containers);
           }
         });
         setContainers(allContainers);
-      } catch (e) {
+      } catch {
         console.log("No containers found");
       }
     } catch (error) {
@@ -414,24 +434,305 @@ export default function TransportTripsPage() {
     setExpandedTrip(expandedTrip === tripId ? null : tripId);
   };
 
+  const STATUS_LABELS: Record<string, string> = {
+    DISPATCHED: "مُرسلة",
+    AT_BORDER: "في المعبر",
+    DELIVERED: "تم التسليم",
+  };
+
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       DISPATCHED: "bg-blue-50 text-blue-600 border-blue-200",
       AT_BORDER: "bg-amber-50 text-amber-600 border-amber-200",
       DELIVERED: "bg-emerald-50 text-emerald-600 border-emerald-200",
     };
-    const labels: Record<string, string> = {
-      DISPATCHED: "مُ dispatched",
-      AT_BORDER: "في المعبر",
-      DELIVERED: "تم التسليم",
-    };
     return (
       <Badge
         className={cn("border", styles[status] || "bg-gray-50 text-gray-600")}
       >
-        {labels[status] || status}
+        {STATUS_LABELS[status] || status}
       </Badge>
     );
+  };
+
+  const openEditDialog = (trip: TransportTrip) => {
+    setSelectedTrip(trip);
+    setEditForm({
+      trip_number: trip.trip_number || "",
+      loading_date: trip.loading_date
+        ? new Date(trip.loading_date).toISOString().split("T")[0]
+        : "",
+      driver_name: trip.driver_name || "",
+      driver_phone: trip.driver_phone || "",
+      plate_front: trip.plate_front || "",
+      plate_back: trip.plate_back || "",
+      gate_id: trip.gate_id?.toString() || "",
+      transport_company_id: trip.transport_company_id?.toString() || "",
+      sort_num: trip.sort_num?.toString() || "",
+      discharge_date: trip.discharge_date
+        ? new Date(trip.discharge_date).toISOString().split("T")[0]
+        : "",
+      truck_fare: trip.truck_fare?.toString() || "",
+      notes: trip.notes || "",
+      status: trip.status || "DISPATCHED",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTrip) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        trip_number: editForm.trip_number || null,
+        loading_date: editForm.loading_date
+          ? new Date(editForm.loading_date).toISOString()
+          : null,
+        driver_name: editForm.driver_name || null,
+        driver_phone: editForm.driver_phone || null,
+        plate_front: editForm.plate_front || null,
+        plate_back: editForm.plate_back || null,
+        gate_id: editForm.gate_id ? parseInt(editForm.gate_id) : null,
+        transport_company_id: editForm.transport_company_id
+          ? parseInt(editForm.transport_company_id)
+          : null,
+        sort_num: editForm.sort_num ? parseInt(editForm.sort_num) : null,
+        discharge_date: editForm.discharge_date
+          ? new Date(editForm.discharge_date).toISOString()
+          : null,
+        truck_fare: editForm.truck_fare
+          ? parseFloat(editForm.truck_fare)
+          : null,
+        notes: editForm.notes || null,
+        status: editForm.status,
+      };
+      await apiClient.updateTransportTrip(selectedTrip.id, payload);
+      setIsEditDialogOpen(false);
+      await fetchTrips();
+      toast.success("تم تحديث بيانات الرحلة بنجاح");
+    } catch (error) {
+      console.error("Error updating trip", error);
+      toast.error("حدث خطأ أثناء التحديث");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ========= Waybill Edit State & Handlers =========
+  const [isEditWaybillOpen, setIsEditWaybillOpen] = useState(false);
+  const [selectedWaybill, setSelectedWaybill] = useState<{
+    id: number;
+    trip_id: number;
+    sender_company_id?: number | null;
+    trader_id?: number | null;
+    destination_id?: number | null;
+    quantity?: number | null;
+    weight?: number | null;
+    notes?: string | null;
+  } | null>(null);
+  const [waybillEditForm, setWaybillEditForm] = useState({
+    sender_company_id: "",
+    trader_id: "",
+    destination_id: "",
+    quantity: "",
+    weight: "",
+    notes: "",
+  });
+
+  const openEditWaybillDialog = (waybill: {
+    id: number;
+    trip_id: number;
+    sender_company_id?: number | null;
+    trader_id?: number | null;
+    destination_id?: number | null;
+    quantity?: number | null;
+    weight?: number | null;
+    notes?: string | null;
+  }) => {
+    setSelectedWaybill(waybill);
+    setWaybillEditForm({
+      sender_company_id: waybill.sender_company_id?.toString() || "",
+      trader_id: waybill.trader_id?.toString() || "",
+      destination_id: waybill.destination_id?.toString() || "",
+      quantity: waybill.quantity?.toString() || "",
+      weight: waybill.weight?.toString() || "",
+      notes: waybill.notes || "",
+    });
+    setIsEditWaybillOpen(true);
+  };
+
+  const handleUpdateWaybill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWaybill) return;
+    setSubmitting(true);
+    try {
+      await apiClient.updateTripWaybill(selectedWaybill.id, {
+        sender_company_id: waybillEditForm.sender_company_id
+          ? parseInt(waybillEditForm.sender_company_id)
+          : null,
+        trader_id: waybillEditForm.trader_id
+          ? parseInt(waybillEditForm.trader_id)
+          : null,
+        destination_id: waybillEditForm.destination_id
+          ? parseInt(waybillEditForm.destination_id)
+          : null,
+        quantity: waybillEditForm.quantity
+          ? parseInt(waybillEditForm.quantity)
+          : null,
+        weight: waybillEditForm.weight
+          ? parseFloat(waybillEditForm.weight)
+          : null,
+        notes: waybillEditForm.notes || null,
+      });
+      setIsEditWaybillOpen(false);
+      await fetchTrips();
+      toast.success("تم تحديث البوليصة بنجاح");
+    } catch (error) {
+      console.error("Error updating waybill", error);
+      toast.error("حدث خطأ أثناء تحديث البوليصة");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteWaybill = async (waybillId: number, tripId: number) => {
+    if (!confirm("هل أنت متأكد من حذف هذه البوليصة؟")) return;
+    try {
+      await apiClient.deleteTripWaybill(waybillId);
+      await fetchTrips();
+      toast.success("تم حذف البوليصة بنجاح");
+    } catch (error) {
+      console.error("Error deleting waybill", error);
+      toast.error("لا يمكن حذف البوليصة");
+    }
+    // suppress unused variable warning
+    void tripId;
+  };
+
+  const handleDeleteTripDocument = async (docId: number, tripId: number) => {
+    if (!confirm("هل أنت متأكد من حذف هذا المستند؟")) return;
+    try {
+      await apiClient.deleteTransportTripDocument(tripId, docId);
+      await fetchTrips();
+      toast.success("تم حذف المستند بنجاح");
+    } catch (error) {
+      console.error("Error deleting document", error);
+      toast.error("حدث خطأ أثناء حذف المستند");
+    }
+  };
+
+  // ========= Add Waybill to Existing Trip =========
+  const [isAddWaybillOpen, setIsAddWaybillOpen] = useState(false);
+  const [addWaybillTripId, setAddWaybillTripId] = useState<number | null>(null);
+  const [addWaybillForm, setAddWaybillForm] = useState({
+    sender_company_id: "",
+    trader_id: "",
+    destination_id: "",
+    container_id: "",
+    quantity: "",
+    weight: "",
+    notes: "",
+  });
+
+  const openAddWaybillDialog = (tripId: number) => {
+    setAddWaybillTripId(tripId);
+    setAddWaybillForm({
+      sender_company_id: "",
+      trader_id: "",
+      destination_id: "",
+      container_id: "",
+      quantity: "",
+      weight: "",
+      notes: "",
+    });
+    setIsAddWaybillOpen(true);
+  };
+
+  const handleAddWaybill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addWaybillTripId) return;
+    setSubmitting(true);
+    try {
+      await apiClient.createTripWaybill({
+        trip_id: addWaybillTripId,
+        sender_company_id: addWaybillForm.sender_company_id
+          ? parseInt(addWaybillForm.sender_company_id)
+          : null,
+        trader_id: addWaybillForm.trader_id
+          ? parseInt(addWaybillForm.trader_id)
+          : null,
+        destination_id: addWaybillForm.destination_id
+          ? parseInt(addWaybillForm.destination_id)
+          : null,
+        container_id: addWaybillForm.container_id
+          ? parseInt(addWaybillForm.container_id)
+          : null,
+        quantity: addWaybillForm.quantity
+          ? parseInt(addWaybillForm.quantity)
+          : null,
+        weight: addWaybillForm.weight
+          ? parseFloat(addWaybillForm.weight)
+          : null,
+        notes: addWaybillForm.notes || null,
+      });
+      setIsAddWaybillOpen(false);
+      await fetchTrips();
+      toast.success("تم إضافة البوليصة بنجاح");
+    } catch (error) {
+      console.error("Error adding waybill", error);
+      toast.error("حدث خطأ أثناء إضافة البوليصة");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ========= Add Document to Existing Trip =========
+  const [isAddDocOpen, setIsAddDocOpen] = useState(false);
+  const [addDocTripId, setAddDocTripId] = useState<number | null>(null);
+  const [addDocForm, setAddDocForm] = useState({
+    document_type: "البيان الجمركي",
+    document_number: "",
+  });
+  const [addDocFile, setAddDocFile] = useState<File | null>(null);
+  const [isUploadingAddDoc, setIsUploadingAddDoc] = useState(false);
+
+  const openAddDocDialog = (tripId: number) => {
+    setAddDocTripId(tripId);
+    setAddDocForm({ document_type: "البيان الجمركي", document_number: "" });
+    setAddDocFile(null);
+    setIsAddDocOpen(true);
+  };
+
+  const handleAddDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addDocTripId || !addDocFile) {
+      toast.error("يرجى اختيار ملف أولاً");
+      return;
+    }
+    setIsUploadingAddDoc(true);
+    try {
+      const uploadResult = await apiClient.uploadToS3(addDocFile);
+      if (!uploadResult?.fileUrl) throw new Error("Upload failed");
+
+      await apiClient.request(`/api/transport-trips/${addDocTripId}/documents`, {
+        method: "POST",
+        body: JSON.stringify({
+          document_type: addDocForm.document_type,
+          document_number: addDocForm.document_number || null,
+          file_url: uploadResult.fileUrl,
+          file_name: addDocFile.name,
+        }),
+      });
+      setIsAddDocOpen(false);
+      await fetchTrips();
+      toast.success("تم رفع المستند بنجاح");
+    } catch (error) {
+      console.error("Error adding document", error);
+      toast.error("حدث خطأ أثناء رفع المستند");
+    } finally {
+      setIsUploadingAddDoc(false);
+    }
   };
 
   return (
@@ -664,9 +965,9 @@ export default function TransportTripsPage() {
                 </div>
 
                 <div className="space-y-3 mt-4">
-                  {docFields.map((doc: Record<string, unknown>, index: number) => (
+                {docFields.map((doc, index) => (
                     <div
-                      key={doc.id as string}
+                      key={`doc-${index}`}
                       className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -675,7 +976,7 @@ export default function TransportTripsPage() {
                         </div>
                         <div className="flex flex-col min-w-0 text-right">
                           <span className="text-sm font-bold text-slate-700 truncate block">
-                            {doc.file_name || "مستند بدون اسم"}
+                            {String(doc.file_name || "مستند بدون اسم")}
                           </span>
                           <div className="flex items-center justify-end gap-2 mt-0.5">
                             <Badge
@@ -683,12 +984,12 @@ export default function TransportTripsPage() {
                               className="text-[9px] py-0 px-1.5 rounded-full border-slate-100 font-bold"
                             >
                               {DOCUMENT_TYPES.find(
-                                (t) => t.value === doc.document_type,
-                              )?.label || doc.document_type}
+                                (t) => t.value === String(doc.document_type || ""),
+                              )?.label || String(doc.document_type || "")}
                             </Badge>
                             {doc.document_number && (
                               <span className="text-[10px] text-slate-400">
-                                #{doc.document_number}
+                                #{String(doc.document_number)}
                               </span>
                             )}
                           </div>
@@ -699,7 +1000,7 @@ export default function TransportTripsPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => window.open(doc.file_url, "_blank")}
+                          onClick={() => window.open(String(doc.file_url || ""), "_blank")}
                           className="h-9 w-9 text-slate-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-colors"
                         >
                           <Search size={16} />
@@ -710,13 +1011,8 @@ export default function TransportTripsPage() {
                           size="icon"
                           onClick={async () => {
                             if (doc.dbId) {
-                              if (
-                                confirm(
-                                  "هل أنت متأكد من حذف هذا المستند نهائياً؟ سيتم حذفه من السيرفر أيضاً."
-                                )
-                              ) {
+                              if (confirm("هل أنت متأكد من حذف هذا المستند نهائياً؟")) {
                                 try {
-                                  // Call delete API (will add later if needed)
                                   removeDoc(index);
                                   toast.success("تم حذف المستند بنجاح");
                                 } catch {
@@ -726,7 +1022,7 @@ export default function TransportTripsPage() {
                             } else {
                               if (doc.file_url) {
                                 await apiClient
-                                  .deleteFromS3(doc.file_url)
+                                  .deleteFromS3(String(doc.file_url))
                                   .catch(console.error);
                               }
                               removeDoc(index);
@@ -922,6 +1218,602 @@ export default function TransportTripsPage() {
         </Dialog>
       </div>
 
+      {/* Edit Trip Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent
+          className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-2xl"
+          dir="rtl"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-right">
+              تعديل بيانات الرحلة
+            </DialogTitle>
+            <DialogDescription className="text-right text-slate-500">
+              قم بتعديل بيانات الرحلة ثم اضغط حفظ
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">رقم الرحلة</Label>
+                <Input
+                  value={editForm.trip_number}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, trip_number: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">تاريخ التحميل</Label>
+                <Input
+                  type="date"
+                  value={editForm.loading_date}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, loading_date: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">اسم السائق</Label>
+                <Input
+                  value={editForm.driver_name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, driver_name: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">هاتف السائق</Label>
+                <Input
+                  value={editForm.driver_phone}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, driver_phone: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">لوحة السيارة (أمامية)</Label>
+                <Input
+                  value={editForm.plate_front}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, plate_front: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">لوحة المقطورة (خلفية)</Label>
+                <Input
+                  value={editForm.plate_back}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, plate_back: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">المعبر الحدودي</Label>
+                <select
+                  value={editForm.gate_id}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, gate_id: e.target.value })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر المعبر --</option>
+                  {gates.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.gate_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">شركة النقل</Label>
+                <select
+                  value={editForm.transport_company_id}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      transport_company_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر الشركة --</option>
+                  {transportCompanies.map((tc) => (
+                    <option key={tc.id} value={tc.id}>
+                      {tc.trans_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">كلفة الشحن ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editForm.truck_fare}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, truck_fare: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">تاريخ التفريغ</Label>
+                <Input
+                  type="date"
+                  value={editForm.discharge_date}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, discharge_date: e.target.value })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الحالة</Label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, status: e.target.value })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="DISPATCHED">مُرسلة</option>
+                  <option value="AT_BORDER">في المعبر</option>
+                  <option value="DELIVERED">تم التسليم</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">ملاحظات</Label>
+              <textarea
+                value={editForm.notes}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, notes: e.target.value })
+                }
+                rows={2}
+                className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background resize-none"
+                placeholder="أي ملاحظات إضافية..."
+              />
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                className="rounded-xl"
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl gap-2"
+              >
+                {submitting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
+                حفظ التعديلات
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Waybill Dialog */}
+      <Dialog open={isEditWaybillOpen} onOpenChange={setIsEditWaybillOpen}>
+        <DialogContent
+          className="sm:max-w-[550px] rounded-2xl"
+          dir="rtl"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-right">
+              تعديل بيانات البوليصة
+            </DialogTitle>
+            <DialogDescription className="text-right text-slate-500">
+              قم بتعديل بيانات البوليصة ثم اضغط حفظ
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateWaybill} className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الشركة المُرسِلة</Label>
+                <select
+                  value={waybillEditForm.sender_company_id}
+                  onChange={(e) =>
+                    setWaybillEditForm({
+                      ...waybillEditForm,
+                      sender_company_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر الشركة --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">التاجر</Label>
+                <select
+                  value={waybillEditForm.trader_id}
+                  onChange={(e) =>
+                    setWaybillEditForm({
+                      ...waybillEditForm,
+                      trader_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر التاجر --</option>
+                  {traders.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.trader_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">الوجهة</Label>
+              <select
+                value={waybillEditForm.destination_id}
+                onChange={(e) =>
+                  setWaybillEditForm({
+                    ...waybillEditForm,
+                    destination_id: e.target.value,
+                  })
+                }
+                className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+              >
+                <option value="">-- اختر الوجهة --</option>
+                {destinations.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.destination_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الوزن (كغ)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={waybillEditForm.weight}
+                  onChange={(e) =>
+                    setWaybillEditForm({
+                      ...waybillEditForm,
+                      weight: e.target.value,
+                    })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">العدد</Label>
+                <Input
+                  type="number"
+                  value={waybillEditForm.quantity}
+                  onChange={(e) =>
+                    setWaybillEditForm({
+                      ...waybillEditForm,
+                      quantity: e.target.value,
+                    })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">ملاحظات</Label>
+              <textarea
+                value={waybillEditForm.notes}
+                onChange={(e) =>
+                  setWaybillEditForm({ ...waybillEditForm, notes: e.target.value })
+                }
+                rows={2}
+                className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background resize-none"
+                placeholder="أي ملاحظات..."
+              />
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditWaybillOpen(false)}
+                className="rounded-xl"
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl gap-2"
+              >
+                {submitting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
+                حفظ التعديلات
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Waybill Dialog */}
+      <Dialog open={isAddWaybillOpen} onOpenChange={setIsAddWaybillOpen}>
+        <DialogContent className="sm:max-w-[550px] rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-right">
+              إضافة بوليصة جديدة
+            </DialogTitle>
+            <DialogDescription className="text-right text-slate-500">
+              أدخل بيانات البوليصة للرحلة الحالية
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddWaybill} className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الشركة المُرسِلة</Label>
+                <select
+                  value={addWaybillForm.sender_company_id}
+                  onChange={(e) =>
+                    setAddWaybillForm({
+                      ...addWaybillForm,
+                      sender_company_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر الشركة --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">التاجر</Label>
+                <select
+                  value={addWaybillForm.trader_id}
+                  onChange={(e) =>
+                    setAddWaybillForm({
+                      ...addWaybillForm,
+                      trader_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر التاجر --</option>
+                  {traders.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.trader_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الوجهة</Label>
+                <select
+                  value={addWaybillForm.destination_id}
+                  onChange={(e) =>
+                    setAddWaybillForm({
+                      ...addWaybillForm,
+                      destination_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر الوجهة --</option>
+                  {destinations.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.destination_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الحاوية</Label>
+                <select
+                  value={addWaybillForm.container_id}
+                  onChange={(e) =>
+                    setAddWaybillForm({
+                      ...addWaybillForm,
+                      container_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر الحاوية --</option>
+                  {containers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.container_number}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الوزن (كغ)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={addWaybillForm.weight}
+                  onChange={(e) =>
+                    setAddWaybillForm({
+                      ...addWaybillForm,
+                      weight: e.target.value,
+                    })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">العدد</Label>
+                <Input
+                  type="number"
+                  value={addWaybillForm.quantity}
+                  onChange={(e) =>
+                    setAddWaybillForm({
+                      ...addWaybillForm,
+                      quantity: e.target.value,
+                    })
+                  }
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">ملاحظات</Label>
+              <textarea
+                value={addWaybillForm.notes}
+                onChange={(e) =>
+                  setAddWaybillForm({ ...addWaybillForm, notes: e.target.value })
+                }
+                rows={2}
+                className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background resize-none"
+                placeholder="أي ملاحظات..."
+              />
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddWaybillOpen(false)}
+                className="rounded-xl"
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl gap-2"
+              >
+                {submitting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Plus size={16} />
+                )}
+                إضافة بوليصة
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Document Dialog */}
+      <Dialog open={isAddDocOpen} onOpenChange={setIsAddDocOpen}>
+        <DialogContent className="sm:max-w-[450px] rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-right">
+              رفع مستند جديد
+            </DialogTitle>
+            <DialogDescription className="text-right text-slate-500">
+              اختر الملف وادخل بيانات المستند
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddDocument} className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">نوع المستند</Label>
+              <select
+                value={addDocForm.document_type}
+                onChange={(e) =>
+                  setAddDocForm({ ...addDocForm, document_type: e.target.value })
+                }
+                className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+              >
+                {DOCUMENT_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">رقم المستند (اختياري)</Label>
+              <Input
+                value={addDocForm.document_number}
+                onChange={(e) =>
+                  setAddDocForm({ ...addDocForm, document_number: e.target.value })
+                }
+                className="rounded-xl"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="font-bold text-sm">الملف</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  onChange={(e) => setAddDocFile(e.target.files?.[0] || null)}
+                  className="rounded-xl"
+                />
+                <FileUp size={18} className="text-slate-400" />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddDocOpen(false)}
+                className="rounded-xl"
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUploadingAddDoc}
+                className="rounded-xl gap-2"
+              >
+                {isUploadingAddDoc ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Upload size={16} />
+                )}
+                رفع وحفظ
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="rounded-2xl bg-white shadow-sm">
@@ -954,7 +1846,7 @@ export default function TransportTripsPage() {
               <Truck className="text-emerald-600" size={20} />
             </div>
             <div>
-              <p className="text-xs text-slate-500">مُ dispatched</p>
+              <p className="text-xs text-slate-500">مُرسلة</p>
               <p className="text-xl font-bold">
                 {trips.filter((t) => t.status === "DISPATCHED").length}
               </p>
@@ -1086,6 +1978,14 @@ export default function TransportTripsPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => openEditDialog(trip)}
+                              className="h-8 w-8 text-blue-500 hover:bg-blue-50"
+                            >
+                              <Edit size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleDeleteTrip(trip.id)}
                               className="h-8 w-8 text-rose-500 hover:bg-rose-50"
                             >
@@ -1098,10 +1998,20 @@ export default function TransportTripsPage() {
                         <TableRow key={`${trip.id}-waybills`}>
                           <TableCell colSpan={8} className="bg-slate-50 p-4">
                             <div className="space-y-3">
-                              <h4 className="font-bold text-sm flex items-center gap-2">
-                                <Package size={16} />
-                                البوالص ({trip.waybills?.length || 0})
-                              </h4>
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-bold text-sm flex items-center gap-2">
+                                  <Package size={16} />
+                                  البوالص ({trip.waybills?.length || 0})
+                                </h4>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openAddWaybillDialog(trip.id)}
+                                  className="h-7 rounded-xl gap-1 text-xs border-primary/30 text-primary hover:bg-primary/5"
+                                >
+                                  <Plus size={12} /> إضافة بوليصة
+                                </Button>
+                              </div>
                               {trip.waybills && trip.waybills.length > 0 ? (
                                 <Table>
                                   <TableHeader>
@@ -1126,6 +2036,9 @@ export default function TransportTripsPage() {
                                       </TableHead>
                                       <TableHead className="text-center text-xs">
                                         الفاتورة
+                                      </TableHead>
+                                      <TableHead className="text-center text-xs">
+                                        إجراءات
                                       </TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -1166,6 +2079,26 @@ export default function TransportTripsPage() {
                                         <TableCell className="text-center text-xs font-mono">
                                           {waybill.invoice_num || "—"}
                                         </TableCell>
+                                        <TableCell className="text-center">
+                                          <div className="flex justify-center gap-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => openEditWaybillDialog(waybill)}
+                                              className="h-7 w-7 text-blue-500 hover:bg-blue-50"
+                                            >
+                                              <Edit size={13} />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleDeleteWaybill(waybill.id, trip.id)}
+                                              className="h-7 w-7 text-rose-500 hover:bg-rose-50"
+                                            >
+                                              <Trash2 size={13} />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
                                       </TableRow>
                                     ))}
                                   </TableBody>
@@ -1177,10 +2110,20 @@ export default function TransportTripsPage() {
                               )}
                               {/* Documents Section in Expanded Row */}
                               <div className="mt-4 pt-4 border-t border-slate-200">
-                                <h4 className="font-bold text-sm flex items-center gap-2 mb-3">
-                                  <FileText size={16} />
-                                  المستندات ({trip.documents?.length || 0})
-                                </h4>
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-bold text-sm flex items-center gap-2">
+                                    <FileText size={16} />
+                                    المستندات ({trip.documents?.length || 0})
+                                  </h4>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openAddDocDialog(trip.id)}
+                                    className="h-7 rounded-xl gap-1 text-xs border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                                  >
+                                    <Plus size={12} /> رفع مستند
+                                  </Button>
+                                </div>
                                 {trip.documents && trip.documents.length > 0 ? (
                                   <div className="flex flex-wrap gap-3">
                                     {trip.documents.map((doc) => (
@@ -1217,6 +2160,14 @@ export default function TransportTripsPage() {
                                             className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
                                           >
                                             <Search size={14} />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleDeleteTripDocument(doc.id, trip.id)}
+                                            className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
+                                          >
+                                            <Trash2 size={14} />
                                           </Button>
                                         </div>
                                       </div>

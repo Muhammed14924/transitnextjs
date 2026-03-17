@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+
+const s3Client = new S3Client({
+  region: "auto",
+  endpoint: process.env.S3_ENDPOINT!,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY!,
+    secretAccessKey: process.env.S3_SECRET_KEY!,
+  },
+  forcePathStyle: true,
+});
 
 export async function GET(
   req: Request,
@@ -39,6 +50,7 @@ export async function GET(
           },
           orderBy: { createdAt: "desc" },
         },
+        documents: true,
       },
     });
 
@@ -169,9 +181,43 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const tripId = parseInt(id);
 
+    // 1. Fetch trip and its documents for S3 cleanup
+    const trip = await prisma.transport_trips.findUnique({
+      where: { id: tripId },
+      include: {
+        documents: true,
+      },
+    });
+
+    if (!trip) {
+      return NextResponse.json({ error: "Trip not found" }, { status: 404 });
+    }
+
+    // 2. Perform S3 cleanup for all associated documents
+    const bucketName = process.env.S3_BUCKET_NAME!;
+    for (const doc of trip.documents) {
+      try {
+        const fileUrl = doc.file_url;
+        const parts = fileUrl.split(`${bucketName}/`);
+        const key = parts[parts.length - 1];
+
+        if (key) {
+          const command = new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+          });
+          await s3Client.send(command).catch(e => console.error(`S3 Delete failed for document ${doc.id}:`, e));
+        }
+      } catch (s3Error) {
+        console.error(`Cleanup S3 failed for document ${doc.id}:`, s3Error);
+      }
+    }
+
+    // 3. Delete from database (waybills and documents will be deleted via Cascade)
     await prisma.transport_trips.delete({
-      where: { id: parseInt(id) },
+      where: { id: tripId },
     });
 
     return NextResponse.json({ success: true });
