@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/app/providers/AuthProvider";
 import {
   LayoutDashboard,
   Truck,
@@ -14,14 +16,22 @@ import {
   ChevronRight,
   ChevronLeft,
   X,
-  MapPin,
-  Package,
   GitBranch,
+  ShieldCheck,
+  Settings2,
+  LucideIcon,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 
-const navItems = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
   { name: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
   { name: "إدارة النقل البحري", href: "/dashboard/shipments", icon: ShipWheel },
   {
@@ -38,10 +48,6 @@ const navItems = [
   { name: "التجار", href: "/dashboard/traders", icon: UserCheck },
   { name: "المستودعات", href: "/dashboard/depots", icon: Building2 },
   { name: "شركات النقل", href: "/dashboard/transport-companies", icon: Truck },
-  { name: "المنافذ الحدودية", href: "/dashboard/gates", icon: PackageSearch },
-  { name: "الموانئ", href: "/dashboard/ports", icon: ShipWheel },
-  { name: "الوجهات", href: "/dashboard/destinations", icon: MapPin },
-  { name: "وحدات القياس", href: "/dashboard/units", icon: Package },
   {
     name: " إدارة الاصناف الرئيسية",
     href: "/dashboard/item-types",
@@ -53,7 +59,19 @@ const navItems = [
     icon: PackageSearch,
   },
   { name: "المستخدمين", href: "/dashboard/users", icon: Users },
-  { name: "الإعدادات", href: "/dashboard/settings", icon: Settings },
+  { 
+    name: "الصلاحيات والأدوار", 
+    href: "/dashboard/admin/roles", 
+    icon: ShieldCheck,
+    adminOnly: true 
+  },
+  { 
+    name: "إعدادات النظام", 
+    href: "/dashboard/system-settings", 
+    icon: Settings2,
+    adminOnly: true 
+  },
+  { name: "إعدادات الحساب", href: "/dashboard/settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -69,7 +87,15 @@ export function Sidebar({
   mobile,
   onClose,
 }: SidebarProps) {
+  const { user } = useAuth();
   const pathname = usePathname();
+
+  const visibleNavItems = useMemo(() => {
+    return navItems.filter(item => {
+      if (item.adminOnly && user?.role !== 'ADMIN') return false;
+      return true;
+    });
+  }, [user]);
 
   return (
     <aside
@@ -108,7 +134,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link

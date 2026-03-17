@@ -33,10 +33,35 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
+
+interface Company {
+  id: number;
+  company_name: string;
+  compen: string | null;
+  place: string | null;
+  isActive: boolean;
+  company_code: string;
+  Sequence1: number;
+  Sequence2: number;
+  first_internal_serial: number;
+  logo: string | null;
+  createdAt?: string;
+}
 
 export default function CompaniesPage() {
-  const [data, setData] = useState<any[]>([]);
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
+  const [data, setData] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_COMPANY)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   // Add State (Requires expected_invoices for calculation)
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -116,7 +141,7 @@ export default function CompaniesPage() {
     }
   };
 
-  const handleEditClick = (item: any) => {
+  const handleEditClick = (item: Company) => {
     setEditData({
       id: item.id,
       company_name: item.company_name || "",
@@ -187,122 +212,124 @@ export default function CompaniesPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Building2 className="text-primary" /> إدارة الشركات الموردة
         </h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6">
-              <Plus size={16} /> إضافة شركة
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                إضافة شركة وتوليد تسلسل
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">اسم الشركة (عربي)</Label>
-                  <Input
-                    value={addData.company_name}
-                    onChange={(e) =>
-                      setAddData({ ...addData, company_name: e.target.value })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">الاسم (إنجليزي)</Label>
-                  <Input
-                    value={addData.compen}
-                    onChange={(e) =>
-                      setAddData({ ...addData, compen: e.target.value })
-                    }
-                    className="rounded-xl"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">الدولة / الموقع</Label>
-                <div className="relative">
-                  <MapPin
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
-                  <Input
-                    value={addData.place}
-                    onChange={(e) =>
-                      setAddData({ ...addData, place: e.target.value })
-                    }
-                    className="rounded-xl pr-10"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">شعار الشركة (Logo)</Label>
-                <Input
-                  type="file"
-                  accept="image/jpeg, image/png, image/webp"
-                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                  className="rounded-xl"
-                />
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl space-y-3">
-                <Label className="font-bold text-blue-900 flex items-center gap-2">
-                  <Calculator size={16} /> إعدادات تسلسل الفواتير للسنة الحالية
-                </Label>
-                <div className="space-y-2">
-                  <Label className="text-sm text-blue-800">
-                    العدد المتوقع للفواتير/السيارات (لتخصيص المجال)
-                  </Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={addData.expected_invoices}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        expected_invoices: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    className="rounded-xl bg-white"
-                  />
-                  <p className="text-xs text-blue-600">
-                    سيقوم النظام تلقائياً بتوليد كود الشركة، وحجز أرقام
-                    الفواتير، وبدء تسلسل الأصناف.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  الشركة مفعلة
-                </Label>
-              </div>
-              <Button
-                type="button"
-                onClick={handleAdd}
-                className="w-full rounded-xl mt-4"
-              >
-                إضافة وتوليد التسلسل
+        {hasPermission(PERMISSIONS.CREATE_COMPANY) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6">
+                <Plus size={16} /> إضافة شركة
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  إضافة شركة وتوليد تسلسل
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">اسم الشركة (عربي)</Label>
+                    <Input
+                      value={addData.company_name}
+                      onChange={(e) =>
+                        setAddData({ ...addData, company_name: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">الاسم (إنجليزي)</Label>
+                    <Input
+                      value={addData.compen}
+                      onChange={(e) =>
+                        setAddData({ ...addData, compen: e.target.value })
+                      }
+                      className="rounded-xl"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">الدولة / الموقع</Label>
+                  <div className="relative">
+                    <MapPin
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      value={addData.place}
+                      onChange={(e) =>
+                        setAddData({ ...addData, place: e.target.value })
+                      }
+                      className="rounded-xl pr-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">شعار الشركة (Logo)</Label>
+                  <Input
+                    type="file"
+                    accept="image/jpeg, image/png, image/webp"
+                    onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl space-y-3">
+                  <Label className="font-bold text-blue-900 flex items-center gap-2">
+                    <Calculator size={16} /> إعدادات تسلسل الفواتير للسنة الحالية
+                  </Label>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-blue-800">
+                      العدد المتوقع للفواتير/السيارات (لتخصيص المجال)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={addData.expected_invoices}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          expected_invoices: parseInt(e.target.value) || 0,
+                        })
+                      }
+                      className="rounded-xl bg-white"
+                    />
+                    <p className="text-xs text-blue-600">
+                      سيقوم النظام تلقائياً بتوليد كود الشركة، وحجز أرقام
+                      الفواتير، وبدء تسلسل الأصناف.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    الشركة مفعلة
+                  </Label>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAdd}
+                  className="w-full rounded-xl mt-4"
+                >
+                  إضافة وتوليد التسلسل
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Edit Dialog */}
@@ -485,7 +512,7 @@ export default function CompaniesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                data.map((item: any) => (
+                data.map((item: Company) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-mono text-xs text-slate-400">
                       {item.id}
@@ -549,22 +576,26 @@ export default function CompaniesPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_COMPANY) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_COMPANY) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

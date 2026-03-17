@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
-import { getCurrentUser } from "@/app/lib/auth";
+import { getSessionUser, unauthorized, forbidden } from "@/app/lib/api-helper";
+import { hasPermission } from "@/app/lib/auth";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
@@ -18,10 +19,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'VIEW_SHIPMENT'))) return forbidden();
 
     const { id } = await params;
     const shipmentId = parseInt(id);
@@ -50,6 +50,10 @@ export async function GET(
       );
     }
 
+    if (user.role !== 'ADMIN' && user.teamId && 'teamId' in shipment && (shipment as any).teamId !== user.teamId) {
+      return forbidden();
+    }
+
     return NextResponse.json(shipment);
   } catch (error) {
     console.error("Shipment Detail API GET error:", error);
@@ -65,10 +69,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user || user.role === "GUEST") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'EDIT_SHIPMENT'))) return forbidden();
 
     const { id } = await params;
     const shipmentId = parseInt(id);
@@ -86,6 +89,10 @@ export async function PATCH(
 
     if (!shipment) {
       return NextResponse.json({ error: "Shipment not found" }, { status: 404 });
+    }
+
+    if (user.role !== 'ADMIN' && user.teamId && 'teamId' in shipment && (shipment as any).teamId !== user.teamId) {
+      return forbidden();
     }
 
     // 2. Delete existing containers (if we want to replace them all for simplicity)
@@ -185,10 +192,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user || (user.role !== "ADMIN" && user.role !== "MANAGER")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'DELETE_SHIPMENT'))) return forbidden();
 
     const { id } = await params;
     const shipmentId = parseInt(id);
@@ -207,6 +213,10 @@ export async function DELETE(
         { error: "الشحنة غير موجودة أو تم حذفها مسبقاً" },
         { status: 404 },
       );
+    }
+
+    if (user.role !== 'ADMIN' && user.teamId && 'teamId' in shipment && (shipment as any).teamId !== user.teamId) {
+      return forbidden();
     }
 
     // 2. Delete from DB (will cascade delete documents)

@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
-import { getCurrentUser } from "@/app/lib/auth";
-import { requireRole, CAN_WRITE_ROLES } from "@/app/lib/auth-server";
+import { getSessionUser, unauthorized, forbidden } from "@/app/lib/api-helper";
+import { hasPermission } from "@/app/lib/auth";
 
 export async function GET(req: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'VIEW_SHIPMENT'))) return forbidden();
 
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "10");
@@ -36,6 +35,7 @@ export async function GET(req: Request) {
               ],
             }
           : {},
+        user.role !== 'ADMIN' && user.teamId ? { teamId: user.teamId } : {},
       ],
     };
 
@@ -97,8 +97,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { error } = await requireRole(...CAN_WRITE_ROLES);
-    if (error) return error;
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'CREATE_SHIPMENT'))) return forbidden();
 
     const body = await req.json();
 
@@ -143,7 +144,8 @@ export async function POST(req: Request) {
             file_url: body.bl_document_url,
             file_name: body.bl_document_name || 'Bill of Lading',
           }]
-        } : undefined)
+        } : undefined),
+        ...((user.teamId && 'teamId' in prisma.transit_shipments.fields) ? { teamId: user.teamId } : {})
       },
       include: {
         containers: true,

@@ -139,7 +139,7 @@ class ApiClient {
     return this.request(url);
   }
 
-  async createCompany(data: any) {
+  async createCompany(data: Record<string, unknown>) {
     return this.request("/api/companies", {
       method: "POST",
       body: JSON.stringify(data),
@@ -155,7 +155,7 @@ class ApiClient {
     return this.request(`/api/products?${searchParams.toString()}`);
   }
 
-  async createProduct(data: any) {
+  async createProduct(data: Record<string, unknown>) {
     return this.request("/api/products", {
       method: "POST",
       body: JSON.stringify(data),
@@ -169,7 +169,7 @@ class ApiClient {
     return this.request(url);
   }
 
-  async createTrader(data: any) {
+  async createTrader(data: Record<string, unknown>) {
     return this.request("/api/traders", {
       method: "POST",
       body: JSON.stringify(data),
@@ -182,9 +182,16 @@ class ApiClient {
     return this.request(url);
   }
 
-  async createUser(data: any) {
+  async createUser(data: Record<string, unknown>) {
     return this.request("/api/user", {
       method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateUser(id: string, data: Record<string, unknown>) {
+    return this.request(`/api/user/${id}`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -203,7 +210,7 @@ class ApiClient {
   }
 
   // Generic Update/Delete for modularity
-  async updateCompany(id: number | string, data: any) {
+  async updateCompany(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/companies/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -216,7 +223,7 @@ class ApiClient {
     });
   }
 
-  async updateProduct(id: number | string, data: any) {
+  async updateProduct(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/products/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -224,7 +231,7 @@ class ApiClient {
   }
 
 
-  async updateTrader(id: number | string, data: any) {
+  async updateTrader(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/traders/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -272,13 +279,13 @@ class ApiClient {
   async getDepots() {
     return this.request("/api/depots");
   }
-  async createDepot(data: any) {
+  async createDepot(data: Record<string, unknown>) {
     return this.request("/api/depots", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  async updateDepot(id: string | number, data: any) {
+  async updateDepot(id: string | number, data: Record<string, unknown>) {
     return this.request(`/api/depots/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -291,13 +298,13 @@ class ApiClient {
   async getGates() {
     return this.request("/api/gates");
   }
-  async createGate(data: any) {
+  async createGate(data: Record<string, unknown>) {
     return this.request("/api/gates", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  async updateGate(id: string | number, data: any) {
+  async updateGate(id: string | number, data: Record<string, unknown>) {
     return this.request(`/api/gates/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -310,13 +317,13 @@ class ApiClient {
   async getPorts() {
     return this.request("/api/ports");
   }
-  async createPort(data: any) {
+  async createPort(data: Record<string, unknown>) {
     return this.request("/api/ports", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  async updatePort(id: string | number, data: any) {
+  async updatePort(id: string | number, data: Record<string, unknown>) {
     return this.request(`/api/ports/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -329,13 +336,13 @@ class ApiClient {
   async getTypeofitems() {
     return this.request("/api/typeofitems");
   }
-  async createTypeofitem(data: any) {
+  async createTypeofitem(data: Record<string, unknown>) {
     return this.request("/api/typeofitems", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  async updateTypeofitem(id: string | number, data: any) {
+  async updateTypeofitem(id: string | number, data: Record<string, unknown>) {
     return this.request(`/api/typeofitems/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -348,13 +355,13 @@ class ApiClient {
   async getCompItems() {
     return this.request("/api/comp_items");
   }
-  async createCompItem(data: any) {
+  async createCompItem(data: Record<string, unknown>) {
     return this.request("/api/comp_items", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  async updateCompItem(id: string | number, data: any) {
+  async updateCompItem(id: string | number, data: Record<string, unknown>) {
     return this.request(`/api/comp_items/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -368,13 +375,13 @@ class ApiClient {
   getTransportCompanies() {
     return this.request("/api/transport-companies");
   }
-  createTransportCompany(data: any) {
+  createTransportCompany(data: Record<string, unknown>) {
     return this.request("/api/transport-companies", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  updateTransportCompany(id: number, data: any) {
+  updateTransportCompany(id: number, data: Record<string, unknown>) {
     return this.request(`/api/transport-companies/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -388,13 +395,13 @@ class ApiClient {
   getDestinations() {
     return this.request("/api/destinations");
   }
-  createDestination(data: any) {
+  createDestination(data: Record<string, unknown>) {
     return this.request("/api/destinations", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  updateDestination(id: number, data: any) {
+  updateDestination(id: number, data: Record<string, unknown>) {
     return this.request(`/api/destinations/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -408,13 +415,13 @@ class ApiClient {
   getUnits() {
     return this.request("/api/units");
   }
-  createUnit(data: any) {
+  createUnit(data: Record<string, unknown>) {
     return this.request("/api/units", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  updateUnit(id: number, data: any) {
+  updateUnit(id: number, data: Record<string, unknown>) {
     return this.request(`/api/units/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -431,13 +438,13 @@ class ApiClient {
       : "/api/sub-companies";
     return this.request(url);
   }
-  createSubCompany(data: any) {
+  createSubCompany(data: Record<string, unknown>) {
     return this.request("/api/sub-companies", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  updateSubCompany(id: number | string, data: any) {
+  updateSubCompany(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/sub-companies/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -458,13 +465,13 @@ class ApiClient {
   getTransportTripById(id: number | string) {
     return this.request(`/api/transport-trips/${id}`);
   }
-  createTransportTrip(data: any) {
+  createTransportTrip(data: Record<string, unknown>) {
     return this.request("/api/transport-trips", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  updateTransportTrip(id: number | string, data: any) {
+  updateTransportTrip(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/transport-trips/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -491,13 +498,13 @@ class ApiClient {
   getTripWaybillById(id: number | string) {
     return this.request(`/api/trip-waybills/${id}`);
   }
-  createTripWaybill(data: any) {
+  createTripWaybill(data: Record<string, unknown>) {
     return this.request("/api/trip-waybills", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
-  updateTripWaybill(id: number | string, data: any) {
+  updateTripWaybill(id: number | string, data: Record<string, unknown>) {
     return this.request(`/api/trip-waybills/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

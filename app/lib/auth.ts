@@ -1,9 +1,16 @@
-
 import { Role, User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
+import { Permission, PERMISSIONS } from "./permissions";
+
+export type SessionUser = {
+  id: string;
+  role: Role;
+  teamId: string | null;
+  orgCompanyId: string | null;
+};
 const JWT_SECRET = process.env.JWT_SECRET!;
 export const hashPassword = async (password: string): Promise<string> => {
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -51,3 +58,51 @@ export const checkUserPermission = (
     };
     return roleHierarchy[user.role] >= roleHierarchy[requiredRole];
 }
+
+export const hasPermission = async (user: SessionUser, permission: Permission): Promise<boolean> => {
+    if (user.role === 'ADMIN') return true;
+
+    const record = await prisma.rolePermission.findFirst({
+        where: {
+            role: user.role,
+            permission: {
+                name: permission
+            }
+        }
+    });
+
+    return !!record;
+};
+
+export const hasAnyPermission = async (user: SessionUser, permissions: Permission[]): Promise<boolean> => {
+    if (user.role === 'ADMIN') return true;
+
+    for (const p of permissions) {
+        if (await hasPermission(user, p)) return true;
+    }
+    return false;
+};
+
+export const hasAllPermissions = async (user: SessionUser, permissions: Permission[]): Promise<boolean> => {
+    if (user.role === 'ADMIN') return true;
+
+    for (const p of permissions) {
+        if (!(await hasPermission(user, p))) return false;
+    }
+    return true;
+};
+
+export const isAdmin = (user: SessionUser): boolean => {
+    return user.role === 'ADMIN';
+};
+
+export const getUserPermissions = async (user: SessionUser): Promise<string[]> => {
+    if (user.role === 'ADMIN') return Object.values(PERMISSIONS);
+
+    const records = await prisma.rolePermission.findMany({
+        where: { role: user.role },
+        include: { permission: true }
+    });
+
+    return records.map(r => r.permission.name);
+};

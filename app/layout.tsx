@@ -37,6 +37,7 @@ import type { Metadata } from "next";
 import { Cairo } from "next/font/google"; // قمنا باستيراد خط كايرو من جوجل
 import "./globals.css";
 import { AuthProvider } from "./providers/AuthProvider";
+import { Toaster } from "@/app/components/ui/sonner";
 
 // إعداد الخط لدعم اللغتين العربية والإنجليزية
 const cairo = Cairo({
@@ -61,7 +62,10 @@ export default function RootLayout({
       <body
         className={`${cairo.className} antialiased bg-slate-50 text-slate-900`}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -36,6 +36,9 @@ import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 import { cn } from "@/app/lib/utils";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 // --- مكون البطاقة الإحصائية (موجود مسبقاً في ملفك) ---
 function TraderSummaryCard({
@@ -85,9 +88,17 @@ function TraderSummaryCard({
 }
 
 export default function TradersPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_TRADER)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   // حالة الإضافة الجديدة (بدون trader_code)
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -249,186 +260,188 @@ export default function TradersPage() {
         </div>
 
         {/* نافذة الإضافة */}
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6 w-full sm:w-auto">
-              <Plus size={16} /> إضافة تاجر جديد
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[600px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-right text-xl font-bold">
-                إضافة تاجر جديد
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold">
-                  اسم التاجر / الشركة <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  required
-                  value={addData.trader_name}
-                  onChange={(e) =>
-                    setAddData({ ...addData, trader_name: e.target.value })
-                  }
-                  className="rounded-xl"
-                  placeholder="شركة الأمل التجارية..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+        {hasPermission(PERMISSIONS.CREATE_TRADER) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6 w-full sm:w-auto">
+                <Plus size={16} /> إضافة تاجر جديد
+              </Button>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[600px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-right text-xl font-bold">
+                  إضافة تاجر جديد
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label className="font-bold">الشخص المسؤول (المندوب)</Label>
+                  <Label className="font-bold">
+                    اسم التاجر / الشركة <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    required
+                    value={addData.trader_name}
+                    onChange={(e) =>
+                      setAddData({ ...addData, trader_name: e.target.value })
+                    }
+                    className="rounded-xl"
+                    placeholder="شركة الأمل التجارية..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">الشخص المسؤول (المندوب)</Label>
+                    <div className="relative">
+                      <Users
+                        className="absolute right-3 top-3 text-gray-400"
+                        size={16}
+                      />
+                      <Input
+                        value={addData.contact_person}
+                        onChange={(e) =>
+                          setAddData({
+                            ...addData,
+                            contact_person: e.target.value,
+                          })
+                        }
+                        className="rounded-xl pr-10"
+                        placeholder="السيد أحمد..."
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">رقم التواصل</Label>
+                    <div className="relative">
+                      <Phone
+                        className="absolute right-3 top-3 text-gray-400"
+                        size={16}
+                      />
+                      <Input
+                        value={addData.phone}
+                        onChange={(e) =>
+                          setAddData({ ...addData, phone: e.target.value })
+                        }
+                        className="rounded-xl pr-10 text-left"
+                        dir="ltr"
+                        placeholder="+90 5XX XXX XX XX"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">البريد الإلكتروني</Label>
+                    <div className="relative">
+                      <Mail
+                        className="absolute right-3 top-3 text-gray-400"
+                        size={16}
+                      />
+                      <Input
+                        type="email"
+                        value={addData.email}
+                        onChange={(e) =>
+                          setAddData({ ...addData, email: e.target.value })
+                        }
+                        className="rounded-xl pr-10 text-left"
+                        dir="ltr"
+                        placeholder="info@company.com"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">الرقم الضريبي</Label>
+                    <Input
+                      value={addData.tax_number}
+                      onChange={(e) =>
+                        setAddData({ ...addData, tax_number: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="font-bold">العنوان</Label>
                   <div className="relative">
-                    <Users
+                    <MapPin
                       className="absolute right-3 top-3 text-gray-400"
                       size={16}
                     />
                     <Input
-                      value={addData.contact_person}
+                      value={addData.address}
+                      onChange={(e) =>
+                        setAddData({ ...addData, address: e.target.value })
+                      }
+                      className="rounded-xl pr-10"
+                      placeholder="المدينة، المنطقة..."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">الرصيد الافتتاحي</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={addData.opening_balance}
                       onChange={(e) =>
                         setAddData({
                           ...addData,
-                          contact_person: e.target.value,
+                          opening_balance: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="rounded-xl pr-10"
-                      placeholder="السيد أحمد..."
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">رقم التواصل</Label>
-                  <div className="relative">
-                    <Phone
-                      className="absolute right-3 top-3 text-gray-400"
-                      size={16}
-                    />
-                    <Input
-                      value={addData.phone}
-                      onChange={(e) =>
-                        setAddData({ ...addData, phone: e.target.value })
-                      }
-                      className="rounded-xl pr-10 text-left"
+                      className="rounded-xl text-left"
                       dir="ltr"
-                      placeholder="+90 5XX XXX XX XX"
                     />
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">البريد الإلكتروني</Label>
-                  <div className="relative">
-                    <Mail
-                      className="absolute right-3 top-3 text-gray-400"
-                      size={16}
-                    />
+                  <div className="space-y-2">
+                    <Label className="font-bold">
+                      الحد الائتماني (سقف الدين)
+                    </Label>
                     <Input
-                      type="email"
-                      value={addData.email}
+                      type="number"
+                      step="0.01"
+                      value={addData.credit_limit}
                       onChange={(e) =>
-                        setAddData({ ...addData, email: e.target.value })
+                        setAddData({
+                          ...addData,
+                          credit_limit: parseFloat(e.target.value) || 0,
+                        })
                       }
-                      className="rounded-xl pr-10 text-left"
+                      className="rounded-xl text-left"
                       dir="ltr"
-                      placeholder="info@company.com"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">الرقم الضريبي</Label>
-                  <Input
-                    value={addData.tax_number}
-                    onChange={(e) =>
-                      setAddData({ ...addData, tax_number: e.target.value })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label className="font-bold">العنوان</Label>
-                <div className="relative">
-                  <MapPin
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
-                  <Input
-                    value={addData.address}
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
                     onChange={(e) =>
-                      setAddData({ ...addData, address: e.target.value })
+                      setAddData({ ...addData, isActive: e.target.checked })
                     }
-                    className="rounded-xl pr-10"
-                    placeholder="المدينة، المنطقة..."
+                    className="w-4 h-4 rounded text-primary focus:ring-primary"
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">الرصيد الافتتاحي</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={addData.opening_balance}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        opening_balance: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="rounded-xl text-left"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">
-                    الحد الائتماني (سقف الدين)
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    حساب التاجر نشط
                   </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={addData.credit_limit}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        credit_limit: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="rounded-xl text-left"
-                    dir="ltr"
-                  />
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary focus:ring-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  حساب التاجر نشط
-                </Label>
-              </div>
-
-              <Button type="submit" className="w-full rounded-xl mt-4">
-                حفظ التاجر
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <Button type="submit" className="w-full rounded-xl mt-4">
+                  حفظ التاجر
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* نافذة التعديل */}
@@ -643,22 +656,26 @@ export default function TradersPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50 h-8 w-8 rounded-lg"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50 h-8 w-8 rounded-lg"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_TRADER) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50 h-8 w-8 rounded-lg"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_TRADER) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50 h-8 w-8 rounded-lg"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

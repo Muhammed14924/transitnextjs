@@ -4,12 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
-  Plus,
   Search,
   Users,
   ShieldCheck,
   UserPlus,
-  Mail,
   Settings,
   MoreVertical,
   ShieldAlert,
@@ -37,7 +35,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import {
@@ -53,21 +50,38 @@ import { Label } from "@/app/components/ui/label";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 
+interface User {
+  id: string;
+  name: string | null;
+  username: string | null;
+  email: string;
+  role: string;
+  createdAt: string;
+  team?: { id: string; name: string } | null;
+}
+
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
+    role: "USER",
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    username: "",
+    email: "",
+    password: "", // optional
     role: "USER",
   });
 
@@ -104,6 +118,48 @@ export default function UsersPage() {
     }
   };
 
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setLoading(true);
+    try {
+      const data: Record<string, string> = {
+        name: editFormData.username, // sync name with username for simplicity or use separate field
+        username: editFormData.username,
+        email: editFormData.email,
+        role: editFormData.role,
+      };
+      
+      if (editFormData.password.trim()) {
+        data.password = editFormData.password.trim();
+      }
+      
+      console.log("Updating user:", selectedUser.id, data);
+      await apiClient.updateUser(selectedUser.id, data);
+      
+      setIsEditDialogOpen(false);
+      await fetchUsers();
+      toast.success("تم تحديث بيانات المستخدم بنجاح");
+    } catch (error) {
+      console.error("Error updating user:", error);
+      const message = error instanceof Error ? error.message : "حدث خطأ أثناء التحديث";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditDialog = (user: User) => {
+    setSelectedUser(user);
+    setEditFormData({
+      username: user.username || "",
+      email: user.email || "",
+      password: "",
+      role: user.role || "USER",
+    });
+    setIsEditDialogOpen(true);
+  };
+
   const handleDelete = async () => {
     if (!selectedUser) return;
     try {
@@ -118,7 +174,7 @@ export default function UsersPage() {
     }
   };
 
-  const openDeleteDialog = (user: any) => {
+  const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
     setIsDeleteDialogOpen(true);
   };
@@ -396,6 +452,7 @@ export default function UsersPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => openEditDialog(user)}
                           className="h-10 w-10 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl border border-transparent hover:border-blue-100"
                         >
                           <Edit size={18} />
@@ -441,6 +498,97 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[450px] rounded-[32px] p-8 border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-right text-slate-900 tracking-tight">
+              تعديل حساب المستخدم
+            </DialogTitle>
+            <DialogDescription className="text-right text-slate-500 font-medium">
+              تحديث الصلاحيات أو البيانات الخاصة بـ {selectedUser?.username}.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate}>
+            <div className="grid gap-5 py-6 rtl text-right">
+              <div className="space-y-1.5">
+                <Label className="font-black text-slate-700 text-xs uppercase tracking-widest px-1">
+                  اسم المستخدم
+                </Label>
+                <Input
+                  value={editFormData.username}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, username: e.target.value })
+                  }
+                  className="rounded-2xl h-12 bg-slate-50 border-slate-100 focus:bg-white font-bold"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="font-black text-slate-700 text-xs uppercase tracking-widest px-1">
+                  البريد الإلكتروني
+                </Label>
+                <Input
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, email: e.target.value })
+                  }
+                  className="rounded-2xl h-12 bg-slate-50 border-slate-100 focus:bg-white font-bold"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="font-black text-slate-700 text-xs uppercase tracking-widest px-1">
+                  تغيير كلمة المرور (اختياري)
+                </Label>
+                <Input
+                  type="password"
+                  value={editFormData.password}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, password: e.target.value })
+                  }
+                  placeholder="اتركه فارغاً للحفاظ على القديمة"
+                  className="rounded-2xl h-12 bg-slate-50 border-slate-100 focus:bg-white font-bold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="font-black text-slate-700 text-xs uppercase tracking-widest px-1">
+                  الدور الوظيفي
+                </Label>
+                <select
+                  value={editFormData.role}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, role: e.target.value })
+                  }
+                  className="w-full h-12 rounded-2xl border-slate-100 bg-slate-50 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="USER">مستخدم عادي</option>
+                  <option value="ADMIN">مدير نظام</option>
+                  <option value="VIEWER">مشاهد فقط</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="flex-row-reverse sm:justify-start gap-3 pt-4">
+              <Button
+                type="submit"
+                className="rounded-2xl px-12 h-12 font-black bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 transition-all"
+              >
+                حفظ التغييرات
+              </Button>
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => setIsEditDialogOpen(false)}
+                className="rounded-2xl h-12 px-8 font-bold text-slate-400"
+              >
+                تراجع
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[400px] rounded-[32px] p-8 border-none shadow-2xl">
@@ -454,7 +602,7 @@ export default function UsersPage() {
             <DialogDescription className="text-center text-slate-500 font-bold py-4">
               هل أنت متأكد من حذف حساب{" "}
               <span className="text-slate-900 font-black">
-                "{selectedUser?.username}"
+                &quot;{selectedUser?.username}&quot;
               </span>
               ؟
               <br /> سيتم سحب كافة الصلاحيات ومنعه من الدخول للنظام.
@@ -482,8 +630,16 @@ export default function UsersPage() {
   );
 }
 
-function UserStatCard({ title, value, icon, detail, color }: any) {
-  const themes: any = {
+interface UserStatCardProps {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  detail: string;
+  color: "blue" | "rose" | "emerald" | "amber";
+}
+
+function UserStatCard({ title, value, icon, detail, color }: UserStatCardProps) {
+  const themes: Record<string, string> = {
     blue: "text-blue-600 bg-blue-50/50 border-blue-100",
     rose: "text-rose-600 bg-rose-50/50 border-rose-100",
     emerald: "text-emerald-600 bg-emerald-50/50 border-emerald-100",

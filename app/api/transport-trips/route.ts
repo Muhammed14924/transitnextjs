@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
-import { getCurrentUser } from "@/app/lib/auth";
+import { getSessionUser, unauthorized, forbidden } from "@/app/lib/api-helper";
+import { hasPermission } from "@/app/lib/auth";
 
 export async function GET(req: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'VIEW_TRIP'))) return forbidden();
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status") || undefined;
@@ -19,6 +19,7 @@ export async function GET(req: Request) {
         ...(status && { status }),
         ...(gateId && { gate_id: parseInt(gateId) }),
         ...(transportCompanyId && { transport_company_id: parseInt(transportCompanyId) }),
+        ...(user.role !== 'ADMIN' && user.teamId && 'teamId' in prisma.transport_trips.fields ? { teamId: user.teamId } : {})
       },
       include: {
         gate: {
@@ -57,10 +58,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || user.role === "GUEST") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+    if (!(await hasPermission(user, 'CREATE_TRIP'))) return forbidden();
 
     const body = await req.json();
     const {
@@ -107,6 +107,7 @@ export async function POST(req: Request) {
               },
             }
           : {}),
+        ...((user.teamId && 'teamId' in prisma.transport_trips.fields) ? { teamId: user.teamId } : {})
       },
       include: {
         gate: {
