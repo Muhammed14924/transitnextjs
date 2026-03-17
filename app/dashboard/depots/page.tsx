@@ -410,6 +410,15 @@ export default function DepotsPage() {
                 <TableHead className="text-right font-bold py-4">
                   التاجر
                 </TableHead>
+                <TableHead className="text-right font-bold py-4">
+                  الموقع
+                </TableHead>
+                <TableHead className="text-center font-bold py-4">
+                  أمين المستودع
+                </TableHead>
+                <TableHead className="text-center font-bold py-4">
+                  رقم التواصل
+                </TableHead>
                 <TableHead className="text-center font-bold py-4">
                   بداية التسلسل
                 </TableHead>
@@ -427,14 +436,14 @@ export default function DepotsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     جاري التحميل...
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={10}
                     className="text-center py-8 text-slate-500"
                   >
                     لا توجد بيانات
@@ -462,6 +471,15 @@ export default function DepotsPage() {
                       ) : (
                         <span className="text-gray-400 text-sm">—</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-gray-600">
+                      {item.location || "—"}
+                    </TableCell>
+                    <TableCell className="text-gray-600 text-center">
+                      {item.manager_name || "—"}
+                    </TableCell>
+                    <TableCell className="text-gray-600 font-mono text-center" dir="ltr">
+                      {item.contact_number || "—"}
                     </TableCell>
                     <TableCell className="text-center font-mono text-emerald-700 font-medium">
                       {item.Sequence1 || "—"}

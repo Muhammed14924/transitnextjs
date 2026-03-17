@@ -162,20 +162,6 @@ class ApiClient {
     });
   }
 
-  // Transport
-  async getTransport(q?: string) {
-    const url = q
-      ? `/api/transport?q=${encodeURIComponent(q)}`
-      : "/api/transport";
-    return this.request(url);
-  }
-
-  async createTransport(data: any) {
-    return this.request("/api/transport", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
 
   // Traders
   async getTraders(q?: string) {
@@ -237,24 +223,6 @@ class ApiClient {
     });
   }
 
-  async deleteProduct(id: number | string) {
-    return this.request(`/api/products/${id}`, {
-      method: "DELETE",
-    });
-  }
-
-  async updateTransport(id: number | string, data: any) {
-    return this.request(`/api/transport/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteTransport(id: number | string) {
-    return this.request(`/api/transport/${id}`, {
-      method: "DELETE",
-    });
-  }
 
   async updateTrader(id: number | string, data: any) {
     return this.request(`/api/traders/${id}`, {
@@ -477,6 +445,66 @@ class ApiClient {
   }
   deleteSubCompany(id: number | string) {
     return this.request(`/api/sub-companies/${id}`, { method: "DELETE" });
+  }
+
+  // --- Transport Trips (Land Transport) ---
+  getTransportTrips(params?: { status?: string; gateId?: number; transportCompanyId?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append("status", params.status);
+    if (params?.gateId) searchParams.append("gateId", params.gateId.toString());
+    if (params?.transportCompanyId) searchParams.append("transportCompanyId", params.transportCompanyId.toString());
+    return this.request(`/api/transport-trips?${searchParams.toString()}`);
+  }
+  getTransportTripById(id: number | string) {
+    return this.request(`/api/transport-trips/${id}`);
+  }
+  createTransportTrip(data: any) {
+    return this.request("/api/transport-trips", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateTransportTrip(id: number | string, data: any) {
+    return this.request(`/api/transport-trips/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteTransportTrip(id: number | string) {
+    return this.request(`/api/transport-trips/${id}`, { method: "DELETE" });
+  }
+
+  deleteTransportTripDocument(tripId: number | string, docId: number | string) {
+    return this.request(`/api/transport-trips/${tripId}/documents/${docId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // --- Trip Waybills (Land Transport) ---
+  getTripWaybills(params?: { tripId?: number; traderId?: number; senderCompanyId?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.tripId) searchParams.append("tripId", params.tripId.toString());
+    if (params?.traderId) searchParams.append("traderId", params.traderId.toString());
+    if (params?.senderCompanyId) searchParams.append("senderCompanyId", params.senderCompanyId.toString());
+    return this.request(`/api/trip-waybills?${searchParams.toString()}`);
+  }
+  getTripWaybillById(id: number | string) {
+    return this.request(`/api/trip-waybills/${id}`);
+  }
+  createTripWaybill(data: any) {
+    return this.request("/api/trip-waybills", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateTripWaybill(id: number | string, data: any) {
+    return this.request(`/api/trip-waybills/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  deleteTripWaybill(id: number | string) {
+    return this.request(`/api/trip-waybills/${id}`, { method: "DELETE" });
   }
 }
 

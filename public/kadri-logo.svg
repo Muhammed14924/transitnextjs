@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 150" width="100%" height="100%">
+  <defs>
+    <style>
+      .k-letter { fill: #8A151B; font-family: 'Segoe UI', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+      .adri-text { fill: #000000; font-family: 'Segoe UI', Arial, sans-serif; font-weight: 800; font-size: 120px; letter-spacing: -2px; }
+      .group-text { fill: #8A151B; font-family: 'Segoe UI', Arial, sans-serif; font-size: 45px; }
+    </style>
+  </defs>
+  <text x="10" y="110" class="k-letter">K</text>
+  <text x="90" y="110" class="adri-text">adri</text>
+  <text x="220" y="145" class="group-text">Group</text>
+</svg>

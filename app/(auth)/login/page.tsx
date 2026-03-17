@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
+
 import { useState } from "react";
-import { Truck } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -41,13 +42,20 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800">
         <div className="w-full max-w-md space-y-8">
           <div className="flex flex-col items-center justify-center mb-10">
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4 text-primary">
-              <Truck size={32} />
+            <div className="mb-6 flex justify-center w-full">
+              <Image 
+                src="/kadri-logo.svg" 
+                alt="Kadri Group Logo" 
+                width={150}
+                height={96}
+                className="h-24 md:h-28 w-auto object-contain drop-shadow-sm transition-all duration-300 hover:scale-105" 
+                priority
+              />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-              أهلاً بك مجدداً
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white text-center text-balance leading-tight">
+              شركة الكادري ترحب بكم
             </h1>
-            <p className="text-slate-500 mt-2 text-center">
+            <p className="text-slate-500 mt-3 text-center text-sm md:text-base px-4">
               أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى لوحة التحكم
             </p>
           </div>

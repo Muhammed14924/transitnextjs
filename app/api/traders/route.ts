@@ -25,9 +25,6 @@ export async function GET(req: Request) {
           }
         : undefined,
       include: {
-        _count: {
-          select: { trans_2: true },
-        },
         depots: true,
       },
       orderBy: { createdAt: "desc" },

@@ -23,10 +23,18 @@ import { Button } from "@/app/components/ui/button";
 
 const navItems = [
   { name: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
-  { name: "إدارة النقل البحري", href: "/dashboard/shipments", icon: Truck },
+  { name: "إدارة النقل البحري", href: "/dashboard/shipments", icon: ShipWheel },
+  {
+    name: "إدارة النقل البري",
+    href: "/dashboard/transport-trips",
+    icon: Truck,
+  },
   { name: "إدارة الشركات", href: "/dashboard/companies", icon: Building2 },
-  { name: "الشركات الفرعية", href: "/dashboard/sub-companies", icon: GitBranch },
-  { name: "بيانات النقل", href: "/dashboard/transport", icon: ShipWheel },
+  {
+    name: "الشركات الفرعية",
+    href: "/dashboard/sub-companies",
+    icon: GitBranch,
+  },
   { name: "التجار", href: "/dashboard/traders", icon: UserCheck },
   { name: "المستودعات", href: "/dashboard/depots", icon: Building2 },
   { name: "شركات النقل", href: "/dashboard/transport-companies", icon: Truck },

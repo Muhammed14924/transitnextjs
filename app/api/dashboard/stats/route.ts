@@ -12,7 +12,7 @@ export async function GET() {
     const [totalShipments, activeTransport, totalCompanies, pendingShipments] =
       await Promise.all([
         prisma.transit_shipments.count(),
-        prisma.transport.count(),
+        prisma.transport_trips.count(),
         prisma.companies.count(),
         prisma.transit_shipments.count({
           where: {

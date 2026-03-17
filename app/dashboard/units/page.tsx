@@ -100,7 +100,7 @@ export default function UnitsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-20 max-w-4xl mx-auto">
+    <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Package className="text-primary" /> وحدات القياس
