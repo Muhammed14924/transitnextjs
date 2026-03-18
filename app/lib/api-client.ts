@@ -513,6 +513,22 @@ class ApiClient {
   deleteTripWaybill(id: number | string) {
     return this.request(`/api/trip-waybills/${id}`, { method: "DELETE" });
   }
+
+  // --- Invoice Items (Waybill Line Items) ---
+  getInvoiceItems(waybillId: number | string) {
+    return this.request(`/api/trip-waybills/${waybillId}/invoice-items`);
+  }
+  saveInvoiceItems(waybillId: number | string, items: any[]) {
+    return this.request(`/api/trip-waybills/${waybillId}/invoice-items`, {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+  }
+  deleteInvoiceItems(waybillId: number | string) {
+    return this.request(`/api/trip-waybills/${waybillId}/invoice-items`, {
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

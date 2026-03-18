@@ -30,6 +30,9 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 interface SubCompany {
   id: number;
@@ -47,9 +50,17 @@ interface Company {
 }
 
 export default function SubCompaniesPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<SubCompany[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_SUB_COMPANY)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   // Add State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -76,7 +87,7 @@ export default function SubCompaniesPage() {
       ]);
       setData(subRes || []);
       setCompanies(compRes || []);
-    } catch {
+    } catch (_e) {
       toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
@@ -128,7 +139,7 @@ export default function SubCompaniesPage() {
       toast.success("تم التعديل بنجاح");
       setIsEditOpen(false);
       fetchData();
-    } catch {
+    } catch (_e) {
       toast.error("خطأ في التعديل");
     }
   };
@@ -139,7 +150,7 @@ export default function SubCompaniesPage() {
       await apiClient.deleteSubCompany(id);
       toast.success("تم الحذف بنجاح");
       fetchData();
-    } catch {
+    } catch (_e) {
       toast.error("لا يمكن الحذف لوجود ارتباطات سابقة.");
     }
   };
@@ -150,77 +161,79 @@ export default function SubCompaniesPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <GitBranch className="text-primary" /> إدارة الشركات الفرعية (المصدرة)
         </h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6">
-              <Plus size={16} /> إضافة شركة فرعية
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[500px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                إضافة شركة فرعية جديدة
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold">اسم الشركة الفرعية (كما يظهر في الفاتورة)</Label>
-                <Input
-                  value={addData.sub_company_name}
-                  onChange={(e) =>
-                    setAddData({ ...addData, sub_company_name: e.target.value })
-                  }
-                  className="rounded-xl"
-                  placeholder="مثال: شركة اورجينال للتجارة..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">الشركة الأساسية التابعة لها</Label>
-                <select
-                  value={addData.company_id}
-                  onChange={(e) =>
-                    setAddData({ ...addData, company_id: e.target.value })
-                  }
-                  className="w-full h-10 px-3 rounded-xl border border-input bg-background"
-                >
-                  <option value="">اختر الشركة الأساسية...</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  نشطة
-                </Label>
-              </div>
-
-              <Button
-                type="button"
-                onClick={handleAdd}
-                className="w-full rounded-xl mt-4"
-              >
-                حفظ البيانات
+        {hasPermission(PERMISSIONS.CREATE_SUB_COMPANY) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6">
+                <Plus size={16} /> إضافة شركة فرعية
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[500px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  إضافة شركة فرعية جديدة
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">اسم الشركة الفرعية (كما يظهر في الفاتورة)</Label>
+                  <Input
+                    value={addData.sub_company_name}
+                    onChange={(e) =>
+                      setAddData({ ...addData, sub_company_name: e.target.value })
+                    }
+                    className="rounded-xl"
+                    placeholder="مثال: شركة اورجينال للتجارة..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="font-bold">الشركة الأساسية التابعة لها</Label>
+                  <select
+                    value={addData.company_id}
+                    onChange={(e) =>
+                      setAddData({ ...addData, company_id: e.target.value })
+                    }
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+                  >
+                    <option value="">اختر الشركة الأساسية...</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.company_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    نشطة
+                  </Label>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAdd}
+                  className="w-full rounded-xl mt-4"
+                >
+                  حفظ البيانات
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card className="rounded-2xl border-none shadow-sm bg-white">
@@ -264,22 +277,26 @@ export default function SubCompaniesPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_SUB_COMPANY) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_SUB_COMPANY) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

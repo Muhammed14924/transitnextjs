@@ -37,13 +37,24 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 export default function CompanyItemsPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_COMP_ITEM)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   const initialAddState = {
     item_ar_name: "",
@@ -84,7 +95,7 @@ export default function CompanyItemsPage() {
       setCompanies(compRes || []);
       setTypes(typesRes || []);
       setUnits(unitsRes || []);
-    } catch (e) {
+    } catch (_e) {
       toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
@@ -158,7 +169,7 @@ export default function CompanyItemsPage() {
       setIsEditOpen(false);
       setEditImageFile(null);
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في التعديل");
     }
   };
@@ -169,7 +180,7 @@ export default function CompanyItemsPage() {
       await apiClient.deleteCompItem(id);
       toast.success("تم الحذف بنجاح");
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في الحذف");
     }
   };
@@ -187,274 +198,276 @@ export default function CompanyItemsPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <PackageSearch className="text-primary" /> إدارة الأصناف والمنتجات
         </h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6">
-              <Plus size={16} /> إضافة صنف جديد
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold border-b pb-4">
-                إضافة صنف جديد للشركة
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-6 pt-2">
-              {/* Company & Type */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
-                <div className="space-y-2 col-span-2 sm:col-span-1">
-                  <Label className="font-bold text-blue-800">
-                    الشركة الموردة *
-                  </Label>
-                  <select
-                    value={addData.company_name}
-                    onChange={(e) =>
-                      setAddData({ ...addData, company_name: e.target.value })
-                    }
-                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                  >
-                    <option value="">-- اختر الشركة --</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.company_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2 col-span-2 sm:col-span-1">
-                  <Label className="font-bold text-blue-800">
-                    نوع الصنف (لتوليد الكود)
-                  </Label>
-                  <select
-                    value={addData.item_type}
-                    onChange={(e) =>
-                      setAddData({ ...addData, item_type: e.target.value })
-                    }
-                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                  >
-                    <option value="">-- اختر النوع --</option>
-                    {types.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.item_type}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Names */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">اسم الصنف (عربي) *</Label>
-                  <Input
-                    value={addData.item_ar_name}
-                    onChange={(e) =>
-                      setAddData({ ...addData, item_ar_name: e.target.value })
-                    }
-                    className="rounded-xl"
-                    placeholder="عصير مانجو..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">اسم الصنف (أجنبي)</Label>
-                  <Input
-                    value={addData.item_en_name}
-                    onChange={(e) =>
-                      setAddData({ ...addData, item_en_name: e.target.value })
-                    }
-                    className="rounded-xl text-left"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">كود المنتج (المصنع)</Label>
-                  <Input
-                    value={addData.manufacturer_code}
-                    onChange={(e) =>
-                      setAddData({ ...addData, manufacturer_code: e.target.value })
-                    }
-                    className="rounded-xl"
-                    placeholder="Ref Code..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">السعر</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={addData.price}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        price: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">تاريخ الصلاحية</Label>
-                  <Input
-                    type="date"
-                    value={addData.date_exp}
-                    onChange={(e) =>
-                      setAddData({ ...addData, date_exp: e.target.value })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-              </div>
-
-              {/* Parent/Child status */}
-              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="ismain"
-                    checked={addData.ismain_item}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        ismain_item: e.target.checked,
-                        main_item: "",
-                      })
-                    }
-                    className="w-4 h-4 rounded text-primary"
-                  />
-                  <Label
-                    htmlFor="ismain"
-                    className="font-bold cursor-pointer text-emerald-900"
-                  >
-                    صنف أساسي (رئيسي)
-                  </Label>
-                </div>
-
-                {!addData.ismain_item && (
-                  <div className="space-y-2">
-                    <Label className="font-bold flex items-center gap-2 text-emerald-800">
-                      <LinkIcon size={14} /> هذا الصنف نكهة/فرع تابع للمنتج
-                      الأساسي:
+        {hasPermission(PERMISSIONS.CREATE_COMP_ITEM) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6">
+                <Plus size={16} /> إضافة صنف جديد
+              </Button>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold border-b pb-4">
+                  إضافة صنف جديد للشركة
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-6 pt-2">
+                {/* Company & Type */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
+                  <div className="space-y-2 col-span-2 sm:col-span-1">
+                    <Label className="font-bold text-blue-800">
+                      الشركة الموردة *
                     </Label>
                     <select
-                      value={addData.main_item}
+                      value={addData.company_name}
                       onChange={(e) =>
-                        setAddData({ ...addData, main_item: e.target.value })
+                        setAddData({ ...addData, company_name: e.target.value })
                       }
-                      className="flex h-10 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                      className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                     >
-                      <option value="">-- اختر المنتج الأساسي --</option>
-                      {availableMainItems.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.item_ar_name}
+                      <option value="">-- اختر الشركة --</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.company_name}
                         </option>
                       ))}
                     </select>
-                    {availableMainItems.length === 0 &&
-                      addData.company_name && (
-                        <p className="text-xs text-rose-500">
-                          لا يوجد منتجات رئيسية لهذه الشركة بعد.
-                        </p>
-                      )}
                   </div>
-                )}
-              </div>
+                  <div className="space-y-2 col-span-2 sm:col-span-1">
+                    <Label className="font-bold text-blue-800">
+                      نوع الصنف (لتوليد الكود)
+                    </Label>
+                    <select
+                      value={addData.item_type}
+                      onChange={(e) =>
+                        setAddData({ ...addData, item_type: e.target.value })
+                      }
+                      className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                    >
+                      <option value="">-- اختر النوع --</option>
+                      {types.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.item_type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-              {/* Logistic details */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">الوحدة</Label>
-                  <select
-                    value={addData.unit}
-                    onChange={(e) =>
-                      setAddData({ ...addData, unit: e.target.value })
-                    }
-                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.unit_name}
-                      </option>
-                    ))}
-                  </select>
+                {/* Names */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">اسم الصنف (عربي) *</Label>
+                    <Input
+                      value={addData.item_ar_name}
+                      onChange={(e) =>
+                        setAddData({ ...addData, item_ar_name: e.target.value })
+                      }
+                      className="rounded-xl"
+                      placeholder="عصير مانجو..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">اسم الصنف (أجنبي)</Label>
+                    <Input
+                      value={addData.item_en_name}
+                      onChange={(e) =>
+                        setAddData({ ...addData, item_en_name: e.target.value })
+                      }
+                      className="rounded-xl text-left"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">كود المنتج (المصنع)</Label>
+                    <Input
+                      value={addData.manufacturer_code}
+                      onChange={(e) =>
+                        setAddData({ ...addData, manufacturer_code: e.target.value })
+                      }
+                      className="rounded-xl"
+                      placeholder="Ref Code..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">السعر</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={addData.price}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          price: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">تاريخ الصلاحية</Label>
+                    <Input
+                      type="date"
+                      value={addData.date_exp}
+                      onChange={(e) =>
+                        setAddData({ ...addData, date_exp: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">التعبئة</Label>
-                  <Input
-                    value={addData.package}
-                    onChange={(e) =>
-                      setAddData({ ...addData, package: e.target.value })
-                    }
-                    className="rounded-xl"
-                    placeholder="6x24"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">الوزن</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={addData.weight}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        weight: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">الوزن القائم</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={addData.packet_weight}
-                    onChange={(e) =>
-                      setAddData({
-                        ...addData,
-                        packet_weight: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">رمز التعرفة (GTIP)</Label>
-                  <Input
-                    type="number"
-                    value={addData.GTIP}
-                    onChange={(e) =>
-                      setAddData({ ...addData, GTIP: e.target.value })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label className="font-bold">صورة المنتج</Label>
-                <Input
-                  type="file"
-                  accept="image/jpeg, image/png, image/webp"
-                  onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                  className="rounded-xl"
-                />
-              </div>
+                {/* Parent/Child status */}
+                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="ismain"
+                      checked={addData.ismain_item}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          ismain_item: e.target.checked,
+                          main_item: "",
+                        })
+                      }
+                      className="w-4 h-4 rounded text-primary"
+                    />
+                    <Label
+                      htmlFor="ismain"
+                      className="font-bold cursor-pointer text-emerald-900"
+                    >
+                      صنف أساسي (رئيسي)
+                    </Label>
+                  </div>
 
-              <Button
-                type="button"
-                onClick={handleAdd}
-                className="w-full rounded-xl mt-4"
-              >
-                حفظ وتوليد الأكواد آلياً
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+                  {!addData.ismain_item && (
+                    <div className="space-y-2">
+                      <Label className="font-bold flex items-center gap-2 text-emerald-800">
+                        <LinkIcon size={14} /> هذا الصنف نكهة/فرع تابع للمنتج
+                        الأساسي:
+                      </Label>
+                      <select
+                        value={addData.main_item}
+                        onChange={(e) =>
+                          setAddData({ ...addData, main_item: e.target.value })
+                        }
+                        className="flex h-10 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                      >
+                        <option value="">-- اختر المنتج الأساسي --</option>
+                        {availableMainItems.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.item_ar_name}
+                          </option>
+                        ))}
+                      </select>
+                      {availableMainItems.length === 0 &&
+                        addData.company_name && (
+                          <p className="text-xs text-rose-500">
+                            لا يوجد منتجات رئيسية لهذه الشركة بعد.
+                          </p>
+                        )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Logistic details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">الوحدة</Label>
+                    <select
+                      value={addData.unit}
+                      onChange={(e) =>
+                        setAddData({ ...addData, unit: e.target.value })
+                      }
+                      className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                    >
+                      {units.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.unit_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">التعبئة</Label>
+                    <Input
+                      value={addData.package}
+                      onChange={(e) =>
+                        setAddData({ ...addData, package: e.target.value })
+                      }
+                      className="rounded-xl"
+                      placeholder="6x24"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">الوزن</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={addData.weight}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          weight: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">الوزن القائم</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={addData.packet_weight}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          packet_weight: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">رمز التعرفة (GTIP)</Label>
+                    <Input
+                      type="number"
+                      value={addData.GTIP}
+                      onChange={(e) =>
+                        setAddData({ ...addData, GTIP: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="font-bold">صورة المنتج</Label>
+                  <Input
+                    type="file"
+                    accept="image/jpeg, image/png, image/webp"
+                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAdd}
+                  className="w-full rounded-xl mt-4"
+                >
+                  حفظ وتوليد الأكواد آلياً
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -877,24 +890,28 @@ export default function CompanyItemsPage() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex justify-center items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditClick(item)}
-                            className="text-blue-500 hover:bg-blue-50 h-8 w-8"
-                          >
-                            <Edit size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item.id)}
-                            className="text-rose-500 hover:bg-rose-50 h-8 w-8"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
+                      <TableCell className="text-center sticky left-0 bg-white shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">
+                        <div className="flex justify-center items-center gap-2">
+                          {hasPermission(PERMISSIONS.EDIT_COMP_ITEM) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditClick(item)}
+                              className="text-blue-500 hover:bg-blue-50 h-8 w-8 cursor-pointer"
+                            >
+                              <Edit size={16} />
+                            </Button>
+                          )}
+                          {hasPermission(PERMISSIONS.DELETE_COMP_ITEM) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(item.id)}
+                              className="text-rose-500 hover:bg-rose-50 h-8 w-8 cursor-pointer"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

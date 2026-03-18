@@ -24,11 +24,22 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 export default function DepotsPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [traders, setTraders] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_DEPOT)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addData, setAddData] = useState({
@@ -151,140 +162,142 @@ export default function DepotsPage() {
           <Building className="text-primary" /> المستودعات (المراكز)
         </h1>
 
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6">
-              <Plus size={16} /> إضافة مستودع
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[500px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                إضافة مستودع جديد
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold">اسم المستودع</Label>
-                <Input
-                  value={addData.depot_name}
-                  onChange={(e) =>
-                    setAddData({ ...addData, depot_name: e.target.value })
-                  }
-                  className="rounded-xl"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+        {hasPermission(PERMISSIONS.CREATE_DEPOT) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6">
+                <Plus size={16} /> إضافة مستودع
+              </Button>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[500px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  إضافة مستودع جديد
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label className="font-bold">الموقع</Label>
+                  <Label className="font-bold">اسم المستودع</Label>
                   <Input
-                    value={addData.location}
+                    value={addData.depot_name}
                     onChange={(e) =>
-                      setAddData({ ...addData, location: e.target.value })
+                      setAddData({ ...addData, depot_name: e.target.value })
                     }
                     className="rounded-xl"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">الموقع</Label>
+                    <Input
+                      value={addData.location}
+                      onChange={(e) =>
+                        setAddData({ ...addData, location: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">أمين المستودع</Label>
+                    <Input
+                      value={addData.manager_name}
+                      onChange={(e) =>
+                        setAddData({ ...addData, manager_name: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <Label className="font-bold">أمين المستودع</Label>
+                  <Label className="font-bold">رقم التواصل</Label>
                   <Input
-                    value={addData.manager_name}
+                    value={addData.contact_number}
                     onChange={(e) =>
-                      setAddData({ ...addData, manager_name: e.target.value })
+                      setAddData({ ...addData, contact_number: e.target.value })
                     }
-                    className="rounded-xl"
+                    className="rounded-xl text-left"
+                    dir="ltr"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label className="font-bold">رقم التواصل</Label>
-                <Input
-                  value={addData.contact_number}
-                  onChange={(e) =>
-                    setAddData({ ...addData, contact_number: e.target.value })
-                  }
-                  className="rounded-xl text-left"
-                  dir="ltr"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">التاجر التابع له</Label>
-                <select
-                  value={addData.traderId || ""}
-                  onChange={(e) =>
-                    setAddData({
-                      ...addData,
-                      traderId: e.target.value ? parseInt(e.target.value) : null,
-                    })
-                  }
-                  className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">-- اختر التاجر --</option>
-                  {traders.map((trader: any) => (
-                    <option key={trader.id} value={trader.id}>
-                      {trader.trader_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl space-y-3">
-                <Label className="font-bold text-emerald-900 flex items-center gap-2">
-                  <Calculator size={16} /> إعدادات تسلسل الفواتير
-                </Label>
                 <div className="space-y-2">
-                  <Label className="text-sm text-emerald-800">
-                    العدد المتوقع للفواتير (الافتراضي 1000)
-                  </Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={addData.expected_invoices}
+                  <Label className="font-bold">التاجر التابع له</Label>
+                  <select
+                    value={addData.traderId || ""}
                     onChange={(e) =>
                       setAddData({
                         ...addData,
-                        expected_invoices: parseInt(e.target.value) || 0,
+                        traderId: e.target.value ? parseInt(e.target.value) : null,
                       })
                     }
-                    className="rounded-xl bg-white"
-                  />
-                  <p className="text-xs text-emerald-600">
-                    سيقوم النظام بتوليد التسلسل تلقائياً في المجال المخصص
-                    للمستودعات (80000+).
-                  </p>
+                    className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">-- اختر التاجر --</option>
+                    {traders.map((trader: any) => (
+                      <option key={trader.id} value={trader.id}>
+                        {trader.trader_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  المستودع نشط
-                </Label>
+                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl space-y-3">
+                  <Label className="font-bold text-emerald-900 flex items-center gap-2">
+                    <Calculator size={16} /> إعدادات تسلسل الفواتير
+                  </Label>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-emerald-800">
+                      العدد المتوقع للفواتير (الافتراضي 1000)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={addData.expected_invoices}
+                      onChange={(e) =>
+                        setAddData({
+                          ...addData,
+                          expected_invoices: parseInt(e.target.value) || 0,
+                        })
+                      }
+                      className="rounded-xl bg-white"
+                    />
+                    <p className="text-xs text-emerald-600">
+                      سيقوم النظام بتوليد التسلسل تلقائياً في المجال المخصص
+                      للمستودعات (80000+).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    المستودع نشط
+                  </Label>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAdd}
+                  className="w-full rounded-xl mt-4"
+                >
+                  حفظ وتوليد التسلسل
+                </Button>
               </div>
-              <Button
-                type="button"
-                onClick={handleAdd}
-                className="w-full rounded-xl mt-4"
-              >
-                حفظ وتوليد التسلسل
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -503,22 +516,26 @@ export default function DepotsPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_DEPOT) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_DEPOT) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

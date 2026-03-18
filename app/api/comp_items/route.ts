@@ -2,14 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const companyId = searchParams.get("companyId");
+
+    const where = companyId ? { company_name: parseInt(companyId) } : {};
+
     const items = await prisma.comp_items.findMany({
+      where,
       include: {
         companies: true,
         typeofitems: true,
         units: true,
-        parent_item: true, // Fetch main item details if exists
+        parent_item: true,
       },
       orderBy: { createdAt: "desc" },
     });

@@ -18,58 +18,125 @@ import {
   X,
   GitBranch,
   ShieldCheck,
-  Settings2,
+  DoorOpen,
+  Anchor,
+  MapPin,
+  Scale,
   LucideIcon,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
 
 interface NavItem {
   name: string;
   href: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  permission?: string;
 }
 
 const navItems: NavItem[] = [
-  { name: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
-  { name: "إدارة النقل البحري", href: "/dashboard/shipments", icon: ShipWheel },
+  {
+    name: "لوحة التحكم",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    permission: PERMISSIONS.VIEW_DASHBOARD,
+  },
+  {
+    name: "إدارة النقل البحري",
+    href: "/dashboard/shipments",
+    icon: ShipWheel,
+    permission: PERMISSIONS.VIEW_SHIPMENT,
+  },
   {
     name: "إدارة النقل البري",
     href: "/dashboard/transport-trips",
     icon: Truck,
+    permission: PERMISSIONS.VIEW_TRIP,
   },
-  { name: "إدارة الشركات", href: "/dashboard/companies", icon: Building2 },
+  {
+    name: "إدارة الشركات",
+    href: "/dashboard/companies",
+    icon: Building2,
+    permission: PERMISSIONS.VIEW_COMPANIES,
+  },
   {
     name: "الشركات الفرعية",
     href: "/dashboard/sub-companies",
     icon: GitBranch,
+    permission: PERMISSIONS.VIEW_SUB_COMPANY,
   },
-  { name: "التجار", href: "/dashboard/traders", icon: UserCheck },
-  { name: "المستودعات", href: "/dashboard/depots", icon: Building2 },
-  { name: "شركات النقل", href: "/dashboard/transport-companies", icon: Truck },
+  {
+    name: "التجار",
+    href: "/dashboard/traders",
+    icon: UserCheck,
+    permission: PERMISSIONS.VIEW_TRADER,
+  },
+  {
+    name: "المستودعات",
+    href: "/dashboard/depots",
+    icon: Building2,
+    permission: PERMISSIONS.VIEW_DEPOT,
+  },
+  {
+    name: "شركات النقل",
+    href: "/dashboard/transport-companies",
+    icon: Truck,
+    permission: PERMISSIONS.VIEW_TRANSPORT_COMPANY,
+  },
+
+  // --- الجداول اللوجستية المضافة حديثاً للسايد بار بناء على طلب المستخدم ---
+  {
+    name: "المعابر",
+    href: "/dashboard/gates",
+    icon: DoorOpen,
+    permission: PERMISSIONS.VIEW_GATE,
+  },
+  {
+    name: "الموانئ",
+    href: "/dashboard/ports",
+    icon: Anchor,
+    permission: PERMISSIONS.VIEW_PORT,
+  },
+  {
+    name: "الوجهات و المصادر",
+    href: "/dashboard/destinations",
+    icon: MapPin,
+    permission: PERMISSIONS.VIEW_DESTINATION,
+  },
+  {
+    name: "الوحدات",
+    href: "/dashboard/units",
+    icon: Scale,
+    permission: PERMISSIONS.VIEW_UNIT,
+  },
+
   {
     name: " إدارة الاصناف الرئيسية",
     href: "/dashboard/item-types",
     icon: PackageSearch,
+    permission: PERMISSIONS.VIEW_ITEM_TYPE,
   },
   {
     name: "إدارة الأصناف والمنتجات",
     href: "/dashboard/company-items",
     icon: PackageSearch,
+    permission: PERMISSIONS.VIEW_COMP_ITEM,
   },
-  { name: "المستخدمين", href: "/dashboard/users", icon: Users },
-  { 
-    name: "الصلاحيات والأدوار", 
-    href: "/dashboard/admin/roles", 
+  {
+    name: "المستخدمين",
+    href: "/dashboard/users",
+    icon: Users,
+    permission: PERMISSIONS.VIEW_USERS,
+  },
+  {
+    name: "الصلاحيات والأدوار",
+    href: "/dashboard/admin/roles",
     icon: ShieldCheck,
-    adminOnly: true 
-  },
-  { 
-    name: "إعدادات النظام", 
-    href: "/dashboard/system-settings", 
-    icon: Settings2,
-    adminOnly: true 
+    permission: PERMISSIONS.MANAGE_USERS,
+    adminOnly: true,
   },
   { name: "إعدادات الحساب", href: "/dashboard/settings", icon: Settings },
 ];
@@ -88,14 +155,21 @@ export function Sidebar({
   onClose,
 }: SidebarProps) {
   const { user } = useAuth();
+  const { hasPermission, loading: permsLoading } = usePermissions();
   const pathname = usePathname();
 
   const visibleNavItems = useMemo(() => {
-    return navItems.filter(item => {
-      if (item.adminOnly && user?.role !== 'ADMIN') return false;
+    if (permsLoading) return [];
+    return navItems.filter((item) => {
+      // Admin check for sensitive areas
+      if (item.adminOnly && user?.role !== "ADMIN") return false;
+
+      // Fine-grained permission check
+      if (item.permission && !hasPermission(item.permission)) return false;
+
       return true;
     });
-  }, [user]);
+  }, [user, hasPermission, permsLoading]);
 
   return (
     <aside

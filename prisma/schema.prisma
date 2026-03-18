@@ -166,6 +166,7 @@ model comp_items {
 
   codes_tables     codes_tables[]
   material_codes   material_codes[]
+  invoice_items   invoice_items[]
 
   @@index([company_name])
   @@index([item_type])
@@ -511,23 +512,51 @@ model trip_waybills {
   quantity            Int?      @default(0)
   weight              Decimal?  @db.Decimal(12, 2)
   
+  // Invoice-specific dates (for LTL shipments)
+  loading_date        DateTime? @db.Date
+  discharge_date       DateTime? @db.Date
+  total_invoice_items Int?      @default(0) // Total line items count
+  
   allocated_fare      Decimal?  @db.Decimal(12, 2)
   notes               String?   @db.Text
   
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  trip                transport_trips    @relation(fields: [trip_id], references: [id], onDelete: Cascade)
-  sender_company      companies?        @relation(fields: [sender_company_id], references: [id])
-  trader              traders?          @relation(fields: [trader_id], references: [id])
-  destination         destination?      @relation(fields: [destination_id], references: [id])
+  trip                transport_trips      @relation(fields: [trip_id], references: [id], onDelete: Cascade)
+  sender_company      companies?          @relation(fields: [sender_company_id], references: [id])
+  trader              traders?            @relation(fields: [trader_id], references: [id])
+  destination         destination?        @relation(fields: [destination_id], references: [id])
   container           shipment_containers? @relation(fields: [container_id], references: [id], onDelete: SetNull)
+  invoice_items       invoice_items[]
 
   @@index([trip_id])
   @@index([sender_company_id])
   @@index([trader_id])
   @@index([destination_id])
   @@index([container_id])
+}
+
+// Invoice Items (Line Items for each Waybill/Invoice)
+model invoice_items {
+  id               Int       @id @default(autoincrement())
+  waybill_id       Int       // Links to the trip_waybills (Invoice Header)
+  comp_item_id     Int       // Links to comp_items (The actual product)
+  unit_id          Int?      // Links to units (e.g., Box, Pallet)
+
+  quantity         Int       @default(1)
+  notes            String?   @db.Text
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  waybill          trip_waybills @relation(fields: [waybill_id], references: [id], onDelete: Cascade)
+  comp_item        comp_items    @relation(fields: [comp_item_id], references: [id])
+  unit             units?        @relation(fields: [unit_id], references: [id])
+
+  @@index([waybill_id])
+  @@index([comp_item_id])
+  @@index([unit_id])
 }
 
 model trip_documents {
@@ -613,6 +642,7 @@ model units {
 
   // -- العلاقات --
   comp_items comp_items[]
+  invoice_items invoice_items[]
 }
 
 // ==========================================

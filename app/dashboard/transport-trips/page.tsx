@@ -22,6 +22,7 @@ import {
   Upload,
   Edit,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import {
   Table,
@@ -178,6 +179,7 @@ interface TransportCompany {
 }
 
 export default function TransportTripsPage() {
+  const router = useRouter();
   const [trips, setTrips] = useState<TransportTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -2081,6 +2083,15 @@ export default function TransportTripsPage() {
                                         </TableCell>
                                         <TableCell className="text-center">
                                           <div className="flex justify-center gap-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => router.push(`/dashboard/transport-trips/${waybill.id}/invoice`)}
+                                              className="h-7 w-7 text-primary hover:bg-primary/10"
+                                              title="تفاصيل الفاتورة"
+                                            >
+                                              <FileText size={13} />
+                                            </Button>
                                             <Button
                                               variant="ghost"
                                               size="icon"

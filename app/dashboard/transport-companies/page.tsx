@@ -33,10 +33,21 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 export default function TransportCompaniesPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_TRANSPORT_COMPANY)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addData, setAddData] = useState({
@@ -68,7 +79,7 @@ export default function TransportCompaniesPage() {
     try {
       const res = await apiClient.getTransportCompanies();
       setData(res || []);
-    } catch (e) {
+    } catch (_e) {
       toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
@@ -95,7 +106,7 @@ export default function TransportCompaniesPage() {
         isActive: true,
       });
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في الإضافة");
     }
   };
@@ -121,7 +132,7 @@ export default function TransportCompaniesPage() {
       toast.success("تم التعديل بنجاح");
       setIsEditOpen(false);
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في التعديل");
     }
   };
@@ -132,7 +143,7 @@ export default function TransportCompaniesPage() {
       await apiClient.deleteTransportCompany(id);
       toast.success("تم الحذف بنجاح");
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في الحذف");
     }
   };
@@ -141,156 +152,158 @@ export default function TransportCompaniesPage() {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">شركات النقل</h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6 cursor-pointer">
-              <Plus size={16} /> إضافة شركة نقل
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[500px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                إضافة شركة نقل جديدة
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold">اسم الشركة</Label>
-                <div className="relative">
-                  <Truck
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
-                  <Input
-                    required
-                    value={addData.trans_name}
-                    onChange={(e) =>
-                      setAddData({ ...addData, trans_name: e.target.value })
-                    }
-                    className="rounded-xl pr-10"
-                    placeholder="شركة الصقر للشحن..."
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        {hasPermission(PERMISSIONS.CREATE_TRANSPORT_COMPANY) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6 cursor-pointer">
+                <Plus size={16} /> إضافة شركة نقل
+              </Button>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[500px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  إضافة شركة نقل جديدة
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label className="font-bold">اسم المندوب / المسؤول</Label>
+                  <Label className="font-bold">اسم الشركة</Label>
                   <div className="relative">
-                    <User
+                    <Truck
                       className="absolute right-3 top-3 text-gray-400"
                       size={16}
                     />
                     <Input
-                      value={addData.contact_person}
+                      required
+                      value={addData.trans_name}
                       onChange={(e) =>
-                        setAddData({
-                          ...addData,
-                          contact_person: e.target.value,
-                        })
+                        setAddData({ ...addData, trans_name: e.target.value })
                       }
                       className="rounded-xl pr-10"
+                      placeholder="شركة الصقر للشحن..."
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">اسم المندوب / المسؤول</Label>
+                    <div className="relative">
+                      <User
+                        className="absolute right-3 top-3 text-gray-400"
+                        size={16}
+                      />
+                      <Input
+                        value={addData.contact_person}
+                        onChange={(e) =>
+                          setAddData({
+                            ...addData,
+                            contact_person: e.target.value,
+                          })
+                        }
+                        className="rounded-xl pr-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">رقم التواصل</Label>
+                    <div className="relative">
+                      <Phone
+                        className="absolute right-3 top-3 text-gray-400"
+                        size={16}
+                      />
+                      <Input
+                        dir="ltr"
+                        value={addData.phone}
+                        onChange={(e) =>
+                          setAddData({ ...addData, phone: e.target.value })
+                        }
+                        className="rounded-xl text-left pl-3 pr-10"
+                      />
+                    </div>
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label className="font-bold">رقم التواصل</Label>
+                  <Label className="font-bold">البريد الإلكتروني</Label>
                   <div className="relative">
-                    <Phone
+                    <Mail
                       className="absolute right-3 top-3 text-gray-400"
                       size={16}
                     />
                     <Input
+                      type="email"
                       dir="ltr"
-                      value={addData.phone}
+                      value={addData.email}
                       onChange={(e) =>
-                        setAddData({ ...addData, phone: e.target.value })
+                        setAddData({ ...addData, email: e.target.value })
                       }
                       className="rounded-xl text-left pl-3 pr-10"
                     />
                   </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">البريد الإلكتروني</Label>
-                <div className="relative">
-                  <Mail
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
-                  <Input
-                    type="email"
-                    dir="ltr"
-                    value={addData.email}
-                    onChange={(e) =>
-                      setAddData({ ...addData, email: e.target.value })
-                    }
-                    className="rounded-xl text-left pl-3 pr-10"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">نطاق العمل</Label>
-                  <select
-                    value={addData.transport_type}
-                    onChange={(e) =>
-                      setAddData({ ...addData, transport_type: e.target.value })
-                    }
-                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {types.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">الرصيد الافتتاحي</Label>
-                  <div className="relative">
-                    <DollarSign
-                      className="absolute right-3 top-3 text-gray-400"
-                      size={16}
-                    />
-                    <Input
-                      type="number"
-                      dir="ltr"
-                      step="0.01"
-                      value={addData.opening_balance}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">نطاق العمل</Label>
+                    <select
+                      value={addData.transport_type}
                       onChange={(e) =>
-                        setAddData({
-                          ...addData,
-                          opening_balance: parseFloat(e.target.value) || 0,
-                        })
+                        setAddData({ ...addData, transport_type: e.target.value })
                       }
-                      className="rounded-xl text-left pl-3 pr-10"
-                    />
+                      className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {types.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">الرصيد الافتتاحي</Label>
+                    <div className="relative">
+                      <DollarSign
+                        className="absolute right-3 top-3 text-gray-400"
+                        size={16}
+                      />
+                      <Input
+                        type="number"
+                        dir="ltr"
+                        step="0.01"
+                        value={addData.opening_balance}
+                        onChange={(e) =>
+                          setAddData({
+                            ...addData,
+                            opening_balance: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="rounded-xl text-left pl-3 pr-10"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  الشركة نشطة ونتعامل معها
-                </Label>
-              </div>
-              <Button type="submit" className="w-full rounded-xl mt-4">
-                حفظ الشركة
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    الشركة نشطة ونتعامل معها
+                  </Label>
+                </div>
+                <Button type="submit" className="w-full rounded-xl mt-4">
+                  حفظ الشركة
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -481,22 +494,26 @@ export default function TransportCompaniesPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50 cursor-pointer"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50 cursor-pointer"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_TRANSPORT_COMPANY) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50 cursor-pointer"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_TRANSPORT_COMPANY) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50 cursor-pointer"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

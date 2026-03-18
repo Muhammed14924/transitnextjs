@@ -280,10 +280,21 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 export default function ItemTypesPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_ITEM_TYPE)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   // حالة الإضافة (بدون كود لأن السيرفر يولده)
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -382,74 +393,76 @@ export default function ItemTypesPage() {
           <Layers className="text-primary" />
           الأنواع الرئيسية للاصناف
         </h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6">
-              <Plus size={16} /> إضافة نوع جديد
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[425px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                إضافة نوع (تصنيف) جديد
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold">
-                  اسم النوع (مثال: بسكويت، عصير طبيعي)
-                </Label>
-                <Input
-                  value={addData.item_type}
-                  onChange={(e) =>
-                    setAddData({ ...addData, item_type: e.target.value })
-                  }
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">وصف النوع (اختياري)</Label>
-                <div className="relative">
-                  <FileText
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
+        {hasPermission(PERMISSIONS.CREATE_ITEM_TYPE) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6">
+                <Plus size={16} /> إضافة نوع جديد
+              </Button>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[425px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  إضافة نوع (تصنيف) جديد
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">
+                    اسم النوع (مثال: بسكويت، عصير طبيعي)
+                  </Label>
                   <Input
-                    value={addData.description}
+                    value={addData.item_type}
                     onChange={(e) =>
-                      setAddData({ ...addData, description: e.target.value })
+                      setAddData({ ...addData, item_type: e.target.value })
                     }
-                    className="rounded-xl pr-10"
+                    className="rounded-xl"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">وصف النوع (اختياري)</Label>
+                  <div className="relative">
+                    <FileText
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      value={addData.description}
+                      onChange={(e) =>
+                        setAddData({ ...addData, description: e.target.value })
+                      }
+                      className="rounded-xl pr-10"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    النوع متاح للاستخدام
+                  </Label>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAdd}
+                  className="w-full rounded-xl mt-4"
+                >
+                  حفظ النوع
+                </Button>
               </div>
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  النوع متاح للاستخدام
-                </Label>
-              </div>
-              <Button
-                type="button"
-                onClick={handleAdd}
-                className="w-full rounded-xl mt-4"
-              >
-                حفظ النوع
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -593,22 +606,26 @@ export default function ItemTypesPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_ITEM_TYPE) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_ITEM_TYPE) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -24,10 +24,21 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 export default function DestinationsPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_DESTINATION)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addData, setAddData] = useState({
@@ -50,7 +61,7 @@ export default function DestinationsPage() {
     try {
       const res = await apiClient.getDestinations();
       setData(res || []);
-    } catch (e) {
+    } catch (_e) {
       toast.error("فشل جلب البيانات");
     } finally {
       setLoading(false);
@@ -73,7 +84,7 @@ export default function DestinationsPage() {
         isActive: true,
       });
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في الإضافة");
     }
   };
@@ -95,7 +106,7 @@ export default function DestinationsPage() {
       toast.success("تم التعديل بنجاح");
       setIsEditOpen(false);
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في التعديل");
     }
   };
@@ -106,7 +117,7 @@ export default function DestinationsPage() {
       await apiClient.deleteDestination(id);
       toast.success("تم الحذف بنجاح");
       fetchData();
-    } catch (e) {
+    } catch (_e) {
       toast.error("خطأ في الحذف");
     }
   };
@@ -114,72 +125,83 @@ export default function DestinationsPage() {
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">إدارة الوجهات</h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary rounded-xl px-6 cursor-pointer">
-              <Plus size={16} /> إضافة وجهة
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[425px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                إضافة وجهة جديدة
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold">
-                  اسم الوجهة (مثال: حلب، مستودع الأمل)
-                </Label>
-                <Input
-                  required
-                  value={addData.destination_name}
-                  onChange={(e) =>
-                    setAddData({ ...addData, destination_name: e.target.value })
-                  }
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">نوع الوجهة</Label>
-                <select
-                  value={addData.destination_type}
-                  onChange={(e) =>
-                    setAddData({ ...addData, destination_type: e.target.value })
-                  }
-                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {types.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  الوجهة متاحة للاختيار
-                </Label>
-              </div>
-              <Button type="submit" className="w-full rounded-xl mt-4">
-                حفظ الوجهة
+        <h1 className="text-2xl font-bold"> إدارة الوجهات و المصادر </h1>
+        {hasPermission(PERMISSIONS.CREATE_DESTINATION) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary rounded-xl px-6 cursor-pointer">
+                <Plus size={16} /> إضافة وجهة
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[425px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  إضافة وجهة جديدة
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label className="font-bold">
+                    اسم الوجهة (مثال: حلب، مستودع الأمل)
+                  </Label>
+                  <Input
+                    required
+                    value={addData.destination_name}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        destination_name: e.target.value,
+                      })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">نوع الوجهة</Label>
+                  <select
+                    value={addData.destination_type}
+                    onChange={(e) =>
+                      setAddData({
+                        ...addData,
+                        destination_type: e.target.value,
+                      })
+                    }
+                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {types.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary"
+                  />
+                  <Label
+                    htmlFor="isActive"
+                    className="font-bold cursor-pointer"
+                  >
+                    الوجهة متاحة للاختيار
+                  </Label>
+                </div>
+                <Button type="submit" className="w-full rounded-xl mt-4">
+                  حفظ الوجهة
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -304,22 +326,26 @@ export default function DestinationsPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_DESTINATION) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_DESTINATION) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

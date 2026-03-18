@@ -255,10 +255,21 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { usePermissions } from "@/app/hooks/use-permissions";
+import { PERMISSIONS } from "@/app/lib/permissions";
+import { useRouter } from "next/navigation";
 
 export default function PortsPage() {
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_PORT)) {
+      router.push("/dashboard");
+    }
+  }, [hasPermission, permLoading, router]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addData, setAddData] = useState({
@@ -352,103 +363,105 @@ export default function PortsPage() {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">الموانئ</h1>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6">
-              <Plus size={16} /> إضافة ميناء
-            </Button>
-          </DialogTrigger>
-          <DialogContent
-            className="sm:max-w-[425px] rounded-2xl p-6 text-right"
-            dir="rtl"
-          >
-            <DialogHeader>
-              <DialogTitle className="text-right text-xl font-bold">
-                إضافة ميناء جديد
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold">اسم الميناء</Label>
-                  <Input
-                    required
-                    value={addData.port_name}
-                    onChange={(e) =>
-                      setAddData({ ...addData, port_name: e.target.value })
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">الكود العالمي</Label>
-                  <Input
-                    value={addData.port_code}
-                    onChange={(e) =>
-                      setAddData({ ...addData, port_code: e.target.value })
-                    }
-                    className="rounded-xl"
-                    placeholder="TRMER"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">المدينة</Label>
-                <div className="relative">
-                  <MapPin
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
-                  <Input
-                    value={addData.city}
-                    onChange={(e) =>
-                      setAddData({ ...addData, city: e.target.value })
-                    }
-                    className="rounded-xl pr-10"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">الدولة</Label>
-                <div className="relative">
-                  <Globe
-                    className="absolute right-3 top-3 text-gray-400"
-                    size={16}
-                  />
-                  <Input
-                    value={addData.country}
-                    onChange={(e) =>
-                      setAddData({ ...addData, country: e.target.value })
-                    }
-                    className="rounded-xl pr-10"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={addData.isActive}
-                  onChange={(e) =>
-                    setAddData({ ...addData, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded text-primary focus:ring-primary"
-                />
-                <Label htmlFor="isActive" className="font-bold cursor-pointer">
-                  الميناء يعمل
-                </Label>
-              </div>
-
-              <Button type="submit" className="w-full rounded-xl mt-4">
-                حفظ الميناء
+        {hasPermission(PERMISSIONS.CREATE_PORT) && (
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary hover:bg-primary/90 rounded-xl px-6">
+                <Plus size={16} /> إضافة ميناء
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent
+              className="sm:max-w-[425px] rounded-2xl p-6 text-right"
+              dir="rtl"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-right text-xl font-bold">
+                  إضافة ميناء جديد
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">اسم الميناء</Label>
+                    <Input
+                      required
+                      value={addData.port_name}
+                      onChange={(e) =>
+                        setAddData({ ...addData, port_name: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold">الكود العالمي</Label>
+                    <Input
+                      value={addData.port_code}
+                      onChange={(e) =>
+                        setAddData({ ...addData, port_code: e.target.value })
+                      }
+                      className="rounded-xl"
+                      placeholder="TRMER"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="font-bold">المدينة</Label>
+                  <div className="relative">
+                    <MapPin
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      value={addData.city}
+                      onChange={(e) =>
+                        setAddData({ ...addData, city: e.target.value })
+                      }
+                      className="rounded-xl pr-10"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="font-bold">الدولة</Label>
+                  <div className="relative">
+                    <Globe
+                      className="absolute right-3 top-3 text-gray-400"
+                      size={16}
+                    />
+                    <Input
+                      value={addData.country}
+                      onChange={(e) =>
+                        setAddData({ ...addData, country: e.target.value })
+                      }
+                      className="rounded-xl pr-10"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={addData.isActive}
+                    onChange={(e) =>
+                      setAddData({ ...addData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-bold cursor-pointer">
+                    الميناء يعمل
+                  </Label>
+                </div>
+
+                <Button type="submit" className="w-full rounded-xl mt-4">
+                  حفظ الميناء
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -602,22 +615,26 @@ export default function PortsPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                          className="text-blue-500 hover:bg-blue-50"
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                          className="text-rose-500 hover:bg-rose-50"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
+                        {hasPermission(PERMISSIONS.EDIT_PORT) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditClick(item)}
+                            className="text-blue-500 hover:bg-blue-50"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                        )}
+                        {hasPermission(PERMISSIONS.DELETE_PORT) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
