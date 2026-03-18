@@ -58,7 +58,7 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_COMPANY)) {
+    if (!permLoading && !hasPermission(PERMISSIONS.VIEW_COMPANIES)) {
       router.push("/dashboard");
     }
   }, [hasPermission, permLoading, router]);
@@ -212,7 +212,7 @@ export default function CompaniesPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Building2 className="text-primary" /> إدارة الشركات الموردة
         </h1>
-        {hasPermission(PERMISSIONS.CREATE_COMPANY) && (
+        {hasPermission(PERMISSIONS.CREATE_COMPANIES) && (
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 bg-primary rounded-xl px-6">
@@ -576,7 +576,7 @@ export default function CompaniesPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center items-center gap-2">
-                        {hasPermission(PERMISSIONS.EDIT_COMPANY) && (
+                        {hasPermission(PERMISSIONS.EDIT_COMPANIES) && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -586,7 +586,7 @@ export default function CompaniesPage() {
                             <Edit size={16} />
                           </Button>
                         )}
-                        {hasPermission(PERMISSIONS.DELETE_COMPANY) && (
+                        {hasPermission(PERMISSIONS.DELETE_COMPANIES) && (
                           <Button
                             variant="ghost"
                             size="icon"
