@@ -33,19 +33,25 @@ export async function GET(
         transport_company: {
           select: { id: true, trans_name: true, phone: true },
         },
+        source_company: {
+          select: { id: true, company_name: true },
+        },
+        source_container: {
+          select: { id: true, container_number: true, container_type: true },
+        },
+        source_depot: {
+          select: { id: true, depot_name: true },
+        },
+        destination_depot: {
+          select: { id: true, depot_name: true },
+        },
         waybills: {
           include: {
-            sender_company: {
-              select: { id: true, company_name: true, company_code: true },
-            },
             trader: {
               select: { id: true, trader_name: true, trader_code: true },
             },
             destination: {
               select: { id: true, destination_name: true, destination_type: true },
-            },
-            container: {
-              select: { id: true, container_number: true, container_type: true },
             },
           },
           orderBy: { createdAt: "desc" },
@@ -94,6 +100,11 @@ export async function PATCH(
       discharge_date,
       truck_fare,
       notes,
+      route_type,
+      source_company_id,
+      source_container_id,
+      source_depot_id,
+      destination_depot_id,
       status,
       isActive,
     } = body;
@@ -146,6 +157,11 @@ export async function PATCH(
         ...(discharge_date !== undefined && { discharge_date: discharge_date ? new Date(discharge_date) : null }),
         ...(truck_fare !== undefined && { truck_fare: truck_fare ? parseFloat(truck_fare) : null }),
         ...(notes !== undefined && { notes }),
+        ...(route_type !== undefined && { route_type }),
+        ...(source_company_id !== undefined && { source_company_id: source_company_id ? parseInt(source_company_id.toString()) : null }),
+        ...(source_container_id !== undefined && { source_container_id: source_container_id ? parseInt(source_container_id.toString()) : null }),
+        ...(source_depot_id !== undefined && { source_depot_id: source_depot_id ? parseInt(source_depot_id.toString()) : null }),
+        ...(destination_depot_id !== undefined && { destination_depot_id: destination_depot_id ? parseInt(destination_depot_id.toString()) : null }),
         ...(status !== undefined && { status }),
         ...(isActive !== undefined && { isActive }),
       },

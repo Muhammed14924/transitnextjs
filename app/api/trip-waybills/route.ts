@@ -12,13 +12,11 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const tripId = searchParams.get("tripId");
     const traderId = searchParams.get("traderId");
-    const senderCompanyId = searchParams.get("senderCompanyId");
 
     const waybills = await prisma.trip_waybills.findMany({
       where: {
         ...(tripId && { trip_id: parseInt(tripId) }),
         ...(traderId && { trader_id: parseInt(traderId) }),
-        ...(senderCompanyId && { sender_company_id: parseInt(senderCompanyId) }),
       },
       include: {
         trip: {
@@ -32,17 +30,11 @@ export async function GET(req: Request) {
             status: true,
           },
         },
-        sender_company: {
-          select: { id: true, company_name: true, company_code: true },
-        },
         trader: {
           select: { id: true, trader_name: true, trader_code: true },
         },
         destination: {
           select: { id: true, destination_name: true },
-        },
-        container: {
-          select: { id: true, container_number: true, container_type: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -68,10 +60,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       trip_id,
-      sender_company_id,
       trader_id,
       destination_id,
-      container_id,
       quantity,
       weight,
       notes,
@@ -118,26 +108,24 @@ export async function POST(req: Request) {
       }
     }
 
-    // Generate invoice_num for the sender_company
+    // Generate invoice_num using source company from trip
     let invoice_num = null;
-    if (sender_company_id) {
-      const senderCompanyId = parseInt(sender_company_id);
+    if (trip.source_company_id) {
+      const sourceCompanyId = trip.source_company_id;
       
-      // Get the latest invoice number for this sender company
+      // Get the latest invoice number for this source company across ANY trip
       const lastWaybill = await prisma.trip_waybills.findFirst({
-        where: { sender_company_id: senderCompanyId },
+        where: { trip: { source_company_id: sourceCompanyId } },
         orderBy: { invoice_num: "desc" },
       });
 
       if (lastWaybill && lastWaybill.invoice_num) {
-        // Extract numeric part and increment
         const numPart = lastWaybill.invoice_num.replace(/\D/g, "");
         const nextNum = parseInt(numPart) + 1;
         invoice_num = String(nextNum).padStart(7, "0");
       } else {
-        // Get company to use its Sequence1 as starting point
         const company = await prisma.companies.findUnique({
-          where: { id: senderCompanyId },
+          where: { id: sourceCompanyId },
         });
         
         if (company && company.Sequence1) {
@@ -151,10 +139,8 @@ export async function POST(req: Request) {
     const waybill = await prisma.trip_waybills.create({
       data: {
         trip_id: tripId,
-        sender_company_id: sender_company_id ? parseInt(sender_company_id) : null,
         trader_id: trader_id ? parseInt(trader_id) : null,
         destination_id: destination_id ? parseInt(destination_id) : null,
-        container_id: container_id ? parseInt(container_id) : null,
         invoice_num,
         quantity: quantity ? parseInt(quantity) : 0,
         weight: weight ? parseFloat(weight) : null,
@@ -171,9 +157,6 @@ export async function POST(req: Request) {
             plate_back: true,
             truck_fare: true,
           },
-        },
-        sender_company: {
-          select: { id: true, company_name: true, company_code: true },
         },
         trader: {
           select: { id: true, trader_name: true, trader_code: true },
@@ -221,9 +204,6 @@ export async function POST(req: Request) {
             plate_back: true,
             truck_fare: true,
           },
-        },
-        sender_company: {
-          select: { id: true, company_name: true, company_code: true },
         },
         trader: {
           select: { id: true, trader_name: true, trader_code: true },

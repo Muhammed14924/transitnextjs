@@ -129,7 +129,7 @@ const shipmentSchema = z.object({
   sub_company_id: z.string().optional().nullable(),
   port_of_loading: z.string().optional().nullable(),
   port_of_discharge: z.string().optional().nullable(),
-  arrival_date: z.string().optional().nullable(),
+  arrival_date: z.string().min(1, "تاريخ الوصول المتوقع مطلوب"),
   expected_discharge_date: z.string().optional().nullable(),
   free_time_days: z.number().int().min(0).default(14),
   isActive: z.boolean().default(true),
@@ -191,7 +191,7 @@ export default function ShipmentsPage() {
     resolver: zodResolver(shipmentSchema),
     defaultValues: {
       bl_number: "",
-      status: "PENDING",
+      status: "IN_TRANSIT",
       free_time_days: 14,
       isActive: true,
       containers: [],
@@ -202,7 +202,7 @@ export default function ShipmentsPage() {
   const resetForm = useCallback(() => {
     form.reset({
       bl_number: "",
-      status: "PENDING",
+      status: "IN_TRANSIT",
       free_time_days: 14,
       isActive: true,
       containers: [],
@@ -228,7 +228,39 @@ export default function ShipmentsPage() {
     name: "documents",
   });
 
-  // ===================== Fetch Data =====================
+  // ===================== Auto-Status Logic =====================
+  const watchedArrivalDate = form.watch("arrival_date");
+  useEffect(() => {
+    if (!watchedArrivalDate) {
+      // Default to IN_TRANSIT if no date is set for new shipments
+      if (isAddDialogOpen && !form.getValues("status")) {
+        form.setValue("status", "IN_TRANSIT");
+      }
+      return;
+    }
+
+    try {
+      const currentStatus = form.getValues("status");
+      // If already Delivered, we don't want to auto-revert to Arrived/EnRoute
+      if (currentStatus === "DELIVERED") return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const arrival = new Date(watchedArrivalDate);
+      arrival.setHours(0, 0, 0, 0);
+      
+      const diffTime = arrival.getTime() - today.getTime();
+      
+      if (diffTime > 0) {
+        form.setValue("status", "IN_TRANSIT");
+      } else {
+        form.setValue("status", "ARRIVED");
+      }
+    } catch (e) {
+      console.error("Status calculation error:", e);
+    }
+  }, [watchedArrivalDate, form, isAddDialogOpen]);
   const fetchShipments = useCallback(async () => {
     try {
       setLoading(true);
@@ -789,13 +821,21 @@ export default function ShipmentsPage() {
               {/* -- Dates & Free Time -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  وصول متوقع
+                  وصول متوقع *
                 </Label>
                 <Input
                   type="date"
                   {...form.register("arrival_date")}
-                  className="rounded-2xl h-12 bg-slate-50 border-none px-5"
+                  className={cn(
+                    "rounded-2xl h-12 bg-slate-50 border-none px-5",
+                    form.formState.errors.arrival_date && "ring-2 ring-rose-500"
+                  )}
                 />
+                {form.formState.errors.arrival_date && (
+                  <p className="text-rose-500 text-[10px] mt-1 pr-1 font-bold">
+                    {form.formState.errors.arrival_date.message as string}
+                  </p>
+                )}
               </div>
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
@@ -819,17 +859,18 @@ export default function ShipmentsPage() {
               </div>
 
               {/* -- Status & isActive -- */}
-              <div className="space-y-2 text-right">
-                <Label className="font-bold text-slate-700 pr-1">الحالة</Label>
+              <div className="space-y-2 text-right opacity-80 pointer-events-none">
+                <Label className="font-bold text-slate-700 pr-1">الحالة (يتم حسابها آلياً)</Label>
                 <select
                   {...form.register("status")}
-                  className="w-full h-12 rounded-2xl bg-slate-50 border-none px-5 text-sm font-bold text-slate-700"
+                  className="w-full h-12 rounded-2xl bg-slate-100 border-none px-5 text-sm font-black text-primary"
                 >
                   <option value="PENDING">⏳ قيد الانتظار</option>
                   <option value="IN_TRANSIT">🚢 في الطريق</option>
-                  <option value="ARRIVED">📍 وصلت</option>
+                  <option value="ARRIVED">📍 وصلت المينا</option>
                   <option value="DELIVERED">✅ تم الاستلام</option>
                 </select>
+                <p className="text-[10px] text-slate-400 font-bold px-2">يتم تحديث الحالة تلقائياً بناءً على تاريخ الوصول المتوقع</p>
               </div>
               <div className="flex items-center gap-3 text-right mt-6">
                 <input

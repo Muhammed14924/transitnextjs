@@ -27,6 +27,14 @@ import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 import { cn } from "@/app/lib/utils";
 
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/app/components/ui/dialog";
+
 // --- Types ---
 interface CompItem {
   id: number;
@@ -43,13 +51,22 @@ interface Unit {
 interface WaybillData {
   id: number;
   invoice_num: string;
-  sender_company?: { id: number; company_name: string };
   trader?: { trader_name: string };
   destination?: { destination_name: string };
-  trip?: { trip_number: string; truck_fare: number };
-  loading_date?: string;
-  discharge_date?: string;
-  invoice_items?: any[];
+  trip?: { 
+    id: number;
+    trip_number: string; 
+    truck_fare: number; 
+    loading_date: string;
+    source_company_id: number | null;
+    source_company?: { id: number; company_name: string } | null;
+  };
+  invoice_items?: {
+    comp_item_id: number;
+    unit_id?: number | null;
+    quantity: number;
+    notes?: string | null;
+  }[];
 }
 
 // --- Searchable Item Select Component ---
@@ -57,7 +74,7 @@ function SearchableItemSelect({
   items, 
   value, 
   onChange, 
-  placeholder = "البحث عن صنف..." 
+  placeholder = "اضغط للبحث عن صنف..." 
 }: { 
   items: CompItem[], 
   value: string, 
@@ -80,63 +97,114 @@ function SearchableItemSelect({
   const selectedItem = items.find(i => i.id.toString() === value);
 
   return (
-    <div className="relative">
-      <div 
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full h-10 px-3 py-2 text-sm bg-white border rounded-md cursor-pointer hover:border-primary/50 transition-colors"
-      >
-        <span className={cn("truncate", !selectedItem && "text-muted-foreground")}>
-          {selectedItem ? selectedItem.item_ar_name : placeholder}
-        </span>
-        <Search size={14} className="text-muted-foreground shrink-0 ml-2" />
-      </div>
-
-      {isOpen && (
-        <>
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={() => setIsOpen(false)} 
-          />
-          <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-xl max-h-[300px] overflow-hidden flex flex-col">
-            <div className="p-2 border-b">
-              <Input
-                autoFocus
-                placeholder="ابحث بالاسم أو الكود..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {filteredItems.length === 0 ? (
-                <div className="p-4 text-center text-xs text-muted-foreground">لا توجد نتائج</div>
-              ) : (
-                filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      onChange(item.id.toString());
-                      setIsOpen(false);
-                      setSearch("");
-                    }}
-                    className={cn(
-                      "flex items-center justify-between px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition-colors border-b last:border-0",
-                      value === item.id.toString() && "bg-primary/5 text-primary font-bold"
-                    )}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span>{item.item_ar_name}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">{item.composite_code}</span>
-                    </div>
-                    {value === item.id.toString() && <Check size={12} />}
-                  </div>
-                ))
-              )}
-            </div>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <div 
+          className={cn(
+            "flex items-center justify-between w-full h-11 px-4 py-2 text-sm bg-white border-2 rounded-xl cursor-pointer transition-all duration-200",
+            isOpen 
+              ? "border-primary shadow-lg shadow-primary/10 ring-2 ring-primary/5" 
+              : "border-slate-100 hover:border-slate-300 hover:bg-slate-50/50"
+          )}
+        >
+          <span className={cn("truncate font-medium", !selectedItem && "text-slate-400 font-normal")}>
+            {selectedItem ? selectedItem.item_ar_name : placeholder}
+          </span>
+          <div className="flex items-center gap-2">
+             {selectedItem && (
+               <span className="text-[10px] bg-slate-100 text-slate-500 font-mono px-1.5 py-0.5 rounded-md hidden md:inline">
+                 {selectedItem.composite_code}
+               </span>
+             )}
+             <Search size={14} className={cn("transition-colors", isOpen ? "text-primary" : "text-slate-400")} />
           </div>
-        </>
-      )}
-    </div>
+        </div>
+      </DialogTrigger>
+
+      <DialogContent className="p-0 sm:max-w-xl overflow-hidden border-none shadow-2xl rounded-[32px]">
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle className="text-xl font-black flex items-center gap-3">
+            <div className="p-2 bg-primary/10 text-primary rounded-xl">
+              <Package size={20} />
+            </div>
+            البحث عن صنف في المخازن
+          </DialogTitle>
+          <div className="mt-4 relative px-1">
+            <Input
+              autoFocus
+              placeholder="ابحث بالاسم العربي، الإنجليزي، أو كود الصنف..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-12 pr-11 text-sm border-slate-200 focus:border-primary rounded-2xl shadow-sm bg-slate-50/50"
+            />
+            <Search className="absolute right-4 top-3.5 text-slate-400" size={18} />
+          </div>
+        </DialogHeader>
+
+        <div className="p-4 max-h-[60vh] overflow-y-auto mt-2">
+          {filteredItems.length === 0 ? (
+            <div className="py-20 text-center flex flex-col items-center gap-4">
+              <div className="p-6 bg-slate-50 rounded-full">
+                <Package className="text-slate-200" size={48} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-800">لا توجد نتائج مطابقة</p>
+                <p className="text-sm text-slate-400">تأكد من كتابة الاسم بشكل صحيح أو ابحث بالكود</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-1.5">
+              {filteredItems.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    onChange(item.id.toString());
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                  className={cn(
+                    "flex items-center justify-between px-5 py-3.5 cursor-pointer rounded-2xl transition-all group/item",
+                    value === item.id.toString() 
+                      ? "bg-primary text-white shadow-xl shadow-primary/20 scale-[1.01]" 
+                      : "hover:bg-slate-50 border border-transparent hover:border-slate-100 text-slate-700 active:scale-[0.98]"
+                  )}
+                >
+                  <div className="flex flex-col gap-1">
+                    <span className="font-black text-base">{item.item_ar_name}</span>
+                    <div className="flex items-center gap-2">
+                      {item.item_en_name && (
+                        <span className={cn(
+                          "text-[11px] font-medium", 
+                          value === item.id.toString() ? "text-primary-foreground/70" : "text-slate-400"
+                        )}>
+                          {item.item_en_name}
+                        </span>
+                      )}
+                      <span className={cn(
+                        "text-[10px] font-bold font-mono px-2 py-0.5 rounded-lg", 
+                        value === item.id.toString() ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                      )}>
+                        {item.composite_code}
+                      </span>
+                    </div>
+                  </div>
+                  {value === item.id.toString() && (
+                    <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm">
+                      <Check size={20} strokeWidth={4} className="animate-in zoom-in duration-300" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 bg-slate-50 border-t flex justify-between items-center text-[10px] text-slate-400 font-bold px-8">
+          <span>نتائج البحث: {filteredItems.length} صنف</span>
+          <span>نظام إدارة النقل البري v2.0</span>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -184,9 +252,10 @@ export default function InvoiceItemsPage() {
           });
         }
 
-        // 3. Fetch Company Products (Seachable)
-        if (res.sender_company_id) {
-          const prods = await apiClient.request(`/api/comp_items?companyId=${res.sender_company_id}`);
+        // 3. Fetch Company Products (Searchable)
+        const sourceCompanyId = res.trip?.source_company_id;
+        if (sourceCompanyId) {
+          const prods = await apiClient.request(`/api/comp_items?companyId=${sourceCompanyId}`);
           setProducts(prods || []);
         }
 
@@ -212,24 +281,25 @@ export default function InvoiceItemsPage() {
   }, []);
 
   const formattedDate = useMemo(() => {
-    if (!mounted || !waybill?.loading_date) return "---";
+    if (!mounted || !waybill?.trip?.loading_date) return "---";
     try {
-      return new Date(waybill.loading_date).toLocaleDateString('ar-SA');
+      return new Date(waybill.trip.loading_date).toLocaleDateString('ar-SA');
     } catch {
       return "---";
     }
-  }, [mounted, waybill?.loading_date]);
+  }, [mounted, waybill?.trip?.loading_date]);
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: { items: { comp_item_id: string; unit_id?: string; quantity: number; notes: string }[] }) => {
     try {
       setSaving(true);
       // Filter out empty items
-      const validItems = data.items.filter((it: { comp_item_id: string }) => it.comp_item_id);
+      const validItems = data.items.filter(it => it.comp_item_id);
       
       await apiClient.saveInvoiceItems(id, validItems);
       toast.success("تم حفظ بنود الفاتورة بنجاح");
       router.back();
-    } catch (_error) {
+    } catch (err) {
+      console.error("Save Error:", err);
       toast.error("حدث خطأ أثناء الحفظ");
     } finally {
       setSaving(false);
@@ -296,7 +366,7 @@ export default function InvoiceItemsPage() {
         <MasterInfoCard 
           icon={Building} 
           label="الشركة المرسلة" 
-          value={waybill.sender_company?.company_name || "---"} 
+          value={waybill.trip?.source_company?.company_name || "---"} 
           color="blue"
         />
         <MasterInfoCard 
@@ -334,7 +404,7 @@ export default function InvoiceItemsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="relative min-w-[1000px]">
               <TableHeader className="bg-slate-50/50">
                 <TableRow className="border-slate-50">
                   <TableHead className="w-[400px] text-right font-black text-slate-400 text-xs px-8 h-12">اسم الصنف (Searchable Product)</TableHead>
@@ -416,8 +486,8 @@ export default function InvoiceItemsPage() {
 
 // --- Helper Components ---
 
-function MasterInfoCard({ icon: Icon, label, value, color }: { icon: any, label: string, value: string, color: string }) {
-  const colorMap: any = {
+function MasterInfoCard({ icon: Icon, label, value, color }: { icon: React.ElementType, label: string, value: string, color: string }) {
+  const colorMap: Record<string, string> = {
     blue: "bg-blue-50 text-blue-600 border-blue-100",
     emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
     orange: "bg-orange-50 text-orange-600 border-orange-100",

@@ -56,36 +56,31 @@ const tripSchema = z.object({
   driver_phone: z.string().optional(),
   plate_front: z.string().optional(),
   plate_back: z.string().optional(),
-  gate_id: z.union([z.string(), z.number()]).optional(),
-  transport_company_id: z.union([z.string(), z.number()]).optional(),
-  sort_num: z.union([z.string(), z.number()]).optional(),
-  discharge_date: z.string().optional(),
-  truck_fare: z.union([z.string(), z.number()]).optional(),
-  notes: z.string().optional(),
-  waybills: z
-    .array(
-      z.object({
-        sender_company_id: z.union([z.string(), z.number()]).optional(),
-        trader_id: z.union([z.string(), z.number()]).optional(),
-        destination_id: z.union([z.string(), z.number()]).optional(),
-        container_id: z.union([z.string(), z.number()]).optional(),
-        quantity: z.union([z.string(), z.number()]).optional(),
-        weight: z.union([z.string(), z.number()]).optional(),
-        notes: z.string().optional(),
-      }),
-    )
-    .optional(),
-  documents: z
-    .array(
-      z.object({
-        dbId: z.number().optional(),
-        document_type: z.string(),
-        document_number: z.string().optional().nullable(),
-        file_url: z.string(),
-        file_name: z.string(),
-      }),
-    )
-    .optional(),
+  gate_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  transport_company_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  sort_num: z.union([z.string(), z.number(), z.null()]).optional(),
+  discharge_date: z.string().optional().nullable(),
+  truck_fare: z.union([z.string(), z.number(), z.null()]).optional(),
+  notes: z.string().optional().nullable(),
+  route_type: z.string().optional(),
+  source_company_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  source_container_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  source_depot_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  destination_depot_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  waybills: z.array(z.object({
+    trader_id: z.union([z.string(), z.number()]).optional(),
+    destination_id: z.union([z.string(), z.number()]).optional(),
+    quantity: z.union([z.string(), z.number()]).optional(),
+    weight: z.union([z.string(), z.number()]).optional(),
+    notes: z.string().optional(),
+  })).optional(),
+  documents: z.array(z.object({
+    dbId: z.number().optional(),
+    document_type: z.string(),
+    document_number: z.string().optional().nullable(),
+    file_url: z.string(),
+    file_name: z.string(),
+  })).optional(),
 });
 
 type TripFormData = z.infer<typeof tripSchema>;
@@ -104,6 +99,11 @@ interface TransportTrip {
   discharge_date: string | null;
   truck_fare: number | null;
   notes: string | null;
+  route_type: string | null;
+  source_company_id: number | null;
+  source_container_id: number | null;
+  source_depot_id: number | null;
+  destination_depot_id: number | null;
   status: string;
   isActive: boolean;
   gate?: { id: number; gate_name: string; gate_code: string | null } | null;
@@ -121,27 +121,15 @@ interface TransportTrip {
 interface TripWaybill {
   id: number;
   trip_id: number;
-  sender_company_id: number | null;
   trader_id: number | null;
   destination_id: number | null;
-  container_id: number | null;
   invoice_num: string | null;
   quantity: number | null;
   weight: number | null;
   allocated_fare: number | null;
   notes: string | null;
-  sender_company?: {
-    id: number;
-    company_name: string;
-    company_code: string;
-  } | null;
   trader?: { id: number; trader_name: string; trader_code: string } | null;
   destination?: { id: number; destination_name: string } | null;
-  container?: {
-    id: number;
-    container_number: string;
-    container_type: string | null;
-  } | null;
 }
 
 interface Company {
@@ -224,12 +212,12 @@ export default function TransportTripsPage() {
     notes: "",
     status: "DISPATCHED",
   });
-
   const {
     register,
     control,
     handleSubmit,
     reset,
+    watch,
   } = useForm<TripFormData>({
     resolver: zodResolver(tripSchema),
     defaultValues: {
@@ -245,6 +233,11 @@ export default function TransportTripsPage() {
       discharge_date: "",
       truck_fare: "",
       notes: "",
+      route_type: "FACTORY",
+      source_company_id: "",
+      source_container_id: "",
+      source_depot_id: "",
+      destination_depot_id: "",
       waybills: [],
       documents: [],
     },
@@ -254,6 +247,8 @@ export default function TransportTripsPage() {
     control,
     name: "waybills",
   });
+
+  const routeType = watch("route_type");
 
   const {
     fields: docFields,
@@ -372,6 +367,11 @@ export default function TransportTripsPage() {
           ? parseFloat(data.truck_fare.toString())
           : null,
         notes: data.notes || null,
+        route_type: data.route_type || null,
+        source_company_id: data.source_company_id ? parseInt(data.source_company_id.toString()) : null,
+        source_container_id: data.source_container_id ? parseInt(data.source_container_id.toString()) : null,
+        source_depot_id: data.source_depot_id ? parseInt(data.source_depot_id.toString()) : null,
+        destination_depot_id: data.destination_depot_id ? parseInt(data.destination_depot_id.toString()) : null,
         documents: data.documents || [],
       };
 
@@ -381,20 +381,14 @@ export default function TransportTripsPage() {
       // Then create waybills if any
       if (data.waybills && data.waybills.length > 0) {
         for (const waybill of data.waybills) {
-          if (waybill.sender_company_id || waybill.trader_id) {
+          if (waybill.trader_id) {
             await apiClient.createTripWaybill({
               trip_id: trip.id,
-              sender_company_id: waybill.sender_company_id
-                ? parseInt(waybill.sender_company_id.toString())
-                : null,
               trader_id: waybill.trader_id
                 ? parseInt(waybill.trader_id.toString())
                 : null,
               destination_id: waybill.destination_id
                 ? parseInt(waybill.destination_id.toString())
-                : null,
-              container_id: waybill.container_id
-                ? parseInt(waybill.container_id.toString())
                 : null,
               quantity: waybill.quantity
                 ? parseInt(waybill.quantity.toString())
@@ -534,7 +528,6 @@ export default function TransportTripsPage() {
     notes?: string | null;
   } | null>(null);
   const [waybillEditForm, setWaybillEditForm] = useState({
-    sender_company_id: "",
     trader_id: "",
     destination_id: "",
     quantity: "",
@@ -554,7 +547,6 @@ export default function TransportTripsPage() {
   }) => {
     setSelectedWaybill(waybill);
     setWaybillEditForm({
-      sender_company_id: waybill.sender_company_id?.toString() || "",
       trader_id: waybill.trader_id?.toString() || "",
       destination_id: waybill.destination_id?.toString() || "",
       quantity: waybill.quantity?.toString() || "",
@@ -570,9 +562,6 @@ export default function TransportTripsPage() {
     setSubmitting(true);
     try {
       await apiClient.updateTripWaybill(selectedWaybill.id, {
-        sender_company_id: waybillEditForm.sender_company_id
-          ? parseInt(waybillEditForm.sender_company_id)
-          : null,
         trader_id: waybillEditForm.trader_id
           ? parseInt(waybillEditForm.trader_id)
           : null,
@@ -628,10 +617,8 @@ export default function TransportTripsPage() {
   const [isAddWaybillOpen, setIsAddWaybillOpen] = useState(false);
   const [addWaybillTripId, setAddWaybillTripId] = useState<number | null>(null);
   const [addWaybillForm, setAddWaybillForm] = useState({
-    sender_company_id: "",
     trader_id: "",
     destination_id: "",
-    container_id: "",
     quantity: "",
     weight: "",
     notes: "",
@@ -640,10 +627,8 @@ export default function TransportTripsPage() {
   const openAddWaybillDialog = (tripId: number) => {
     setAddWaybillTripId(tripId);
     setAddWaybillForm({
-      sender_company_id: "",
       trader_id: "",
       destination_id: "",
-      container_id: "",
       quantity: "",
       weight: "",
       notes: "",
@@ -658,17 +643,11 @@ export default function TransportTripsPage() {
     try {
       await apiClient.createTripWaybill({
         trip_id: addWaybillTripId,
-        sender_company_id: addWaybillForm.sender_company_id
-          ? parseInt(addWaybillForm.sender_company_id)
-          : null,
         trader_id: addWaybillForm.trader_id
           ? parseInt(addWaybillForm.trader_id)
           : null,
         destination_id: addWaybillForm.destination_id
           ? parseInt(addWaybillForm.destination_id)
-          : null,
-        container_id: addWaybillForm.container_id
-          ? parseInt(addWaybillForm.container_id)
           : null,
         quantity: addWaybillForm.quantity
           ? parseInt(addWaybillForm.quantity)
@@ -899,6 +878,121 @@ export default function TransportTripsPage() {
                   </div>
                 </div>
 
+                <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 space-y-4">
+                  <h3 className="font-bold text-sm text-primary border-b border-primary/10 pb-2">
+                    مسار الرحلة والوجهة
+                  </h3>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold">نوع المسار</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => reset({ ...watch(), route_type: 'FACTORY' })}
+                        className={cn(
+                          "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                          routeType === 'FACTORY' 
+                            ? "bg-primary text-white border-primary shadow-sm" 
+                            : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+                        )}
+                      >
+                        مصنع (Factory)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reset({ ...watch(), route_type: 'PORT' })}
+                        className={cn(
+                          "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                          routeType === 'PORT' 
+                            ? "bg-primary text-white border-primary shadow-sm" 
+                            : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+                        )}
+                      >
+                        ميناء (Port)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reset({ ...watch(), route_type: 'INTERNAL_DEPOT' })}
+                        className={cn(
+                          "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                          routeType === 'INTERNAL_DEPOT' 
+                            ? "bg-primary text-white border-primary shadow-sm" 
+                            : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+                        )}
+                      >
+                        مستودع داخلي
+                      </button>
+                    </div>
+                  </div>
+
+                  {routeType === 'FACTORY' && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                      <Label className="text-xs font-bold">المصنع المصدر</Label>
+                      <select
+                        {...register("source_company_id")}
+                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                      >
+                        <option value="">اختر المصنع</option>
+                        {companies.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.company_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {routeType === 'PORT' && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                      <Label className="text-xs font-bold">الحاوية المصدر</Label>
+                      <select
+                        {...register("source_container_id")}
+                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                      >
+                        <option value="">اختر الحاوية</option>
+                        {containers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.container_number} ({c.container_type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {routeType === 'INTERNAL_DEPOT' && (
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold">المستودع المصدر</Label>
+                        <select
+                          {...register("source_depot_id")}
+                          className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                        >
+                          <option value="">اختر المستودع</option>
+                          {gates.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.gate_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold">مستودع الوجهة</Label>
+                        <select
+                          {...register("destination_depot_id")}
+                          className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                        >
+                          <option value="">اختر الوجهة</option>
+                          {gates.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.gate_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-xs font-bold">ملاحظات</Label>
                   <Input
@@ -1060,10 +1154,8 @@ export default function TransportTripsPage() {
                     size="sm"
                     onClick={() =>
                       append({
-                        sender_company_id: undefined,
                         trader_id: undefined,
                         destination_id: undefined,
-                        container_id: undefined,
                         quantity: undefined,
                         weight: undefined,
                         notes: "",
@@ -1095,25 +1187,7 @@ export default function TransportTripsPage() {
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] font-bold">
-                          الشركة المُرسلة
-                        </Label>
-                        <select
-                          {...register(
-                            `waybills.${index}.sender_company_id` as const,
-                          )}
-                          className="w-full h-9 rounded-lg border border-slate-200 px-2 text-sm"
-                        >
-                          <option value="">اختر الشركة</option>
-                          {companies.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.company_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <div className="grid grid-cols-1 gap-3">
                       <div className="space-y-1">
                         <Label className="text-[10px] font-bold">التاجر</Label>
                         <select
@@ -1170,23 +1244,7 @@ export default function TransportTripsPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-bold">
-                        الحاوية (اختياري)
-                      </Label>
-                      <select
-                        {...register(`waybills.${index}.container_id` as const)}
-                        className="w-full h-9 rounded-lg border border-slate-200 px-2 text-sm"
-                      >
-                        <option value="">اختر حاوية</option>
-                        {containers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.container_number} ({c.container_type})
-                          </option>
-                        ))}
-                      </select>
                     </div>
-                  </div>
                 ))}
               </div>
 
@@ -1440,27 +1498,7 @@ export default function TransportTripsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateWaybill} className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">الشركة المُرسِلة</Label>
-                <select
-                  value={waybillEditForm.sender_company_id}
-                  onChange={(e) =>
-                    setWaybillEditForm({
-                      ...waybillEditForm,
-                      sender_company_id: e.target.value,
-                    })
-                  }
-                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">-- اختر الشركة --</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
                 <Label className="font-bold text-sm">التاجر</Label>
                 <select
@@ -1585,27 +1623,7 @@ export default function TransportTripsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddWaybill} className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">الشركة المُرسِلة</Label>
-                <select
-                  value={addWaybillForm.sender_company_id}
-                  onChange={(e) =>
-                    setAddWaybillForm({
-                      ...addWaybillForm,
-                      sender_company_id: e.target.value,
-                    })
-                  }
-                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">-- اختر الشركة --</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
                 <Label className="font-bold text-sm">التاجر</Label>
                 <select
@@ -1627,7 +1645,7 @@ export default function TransportTripsPage() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
                 <Label className="font-bold text-sm">الوجهة</Label>
                 <select
@@ -1644,26 +1662,6 @@ export default function TransportTripsPage() {
                   {destinations.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.destination_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">الحاوية</Label>
-                <select
-                  value={addWaybillForm.container_id}
-                  onChange={(e) =>
-                    setAddWaybillForm({
-                      ...addWaybillForm,
-                      container_id: e.target.value,
-                    })
-                  }
-                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">-- اختر الحاوية --</option>
-                  {containers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.container_number}
                     </option>
                   ))}
                 </select>
@@ -2019,9 +2017,6 @@ export default function TransportTripsPage() {
                                   <TableHeader>
                                     <TableRow className="bg-white">
                                       <TableHead className="text-right text-xs">
-                                        الشركة
-                                      </TableHead>
-                                      <TableHead className="text-right text-xs">
                                         التاجر
                                       </TableHead>
                                       <TableHead className="text-right text-xs">
@@ -2051,15 +2046,10 @@ export default function TransportTripsPage() {
                                         className="bg-white"
                                       >
                                         <TableCell className="text-xs">
-                                          {waybill.sender_company
-                                            ?.company_name || "—"}
-                                        </TableCell>
-                                        <TableCell className="text-xs">
                                           {waybill.trader?.trader_name || "—"}
                                         </TableCell>
                                         <TableCell className="text-xs">
-                                          {waybill.destination
-                                            ?.destination_name || "—"}
+                                          {waybill.destination?.destination_name || "—"}
                                         </TableCell>
                                         <TableCell className="text-center text-xs font-mono">
                                           {waybill.weight
@@ -2084,13 +2074,14 @@ export default function TransportTripsPage() {
                                         <TableCell className="text-center">
                                           <div className="flex justify-center gap-1">
                                             <Button
-                                              variant="ghost"
-                                              size="icon"
+                                              variant="outline"
+                                              size="sm"
                                               onClick={() => router.push(`/dashboard/transport-trips/${waybill.id}/invoice`)}
-                                              className="h-7 w-7 text-primary hover:bg-primary/10"
-                                              title="تفاصيل الفاتورة"
+                                              className="h-7 px-2 rounded-lg text-[10px] gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 transition-all font-black"
+                                              title="إضافة وتعديل بنود الفاتورة"
                                             >
-                                              <FileText size={13} />
+                                              <FileText size={12} />
+                                              الفاتورة
                                             </Button>
                                             <Button
                                               variant="ghost"

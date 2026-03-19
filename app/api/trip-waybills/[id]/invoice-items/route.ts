@@ -13,7 +13,13 @@ export async function GET(
     const waybill = await prisma.trip_waybills.findUnique({
       where: { id: waybillId },
       include: {
-        sender_company: true,
+        trip: {
+          select: {
+            id: true,
+            trip_number: true,
+            source_company_id: true,
+          }
+        },
         trader: true,
         destination: true,
         invoice_items: {

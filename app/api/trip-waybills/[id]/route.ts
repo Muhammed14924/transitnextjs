@@ -25,6 +25,10 @@ export async function GET(
             plate_back: true,
             truck_fare: true,
             status: true,
+            source_company_id: true,
+            source_company: {
+              select: { id: true, company_name: true },
+            },
             gate: {
               select: { id: true, gate_name: true },
             },
@@ -33,17 +37,11 @@ export async function GET(
             },
           },
         },
-        sender_company: {
-          select: { id: true, company_name: true, company_code: true },
-        },
         trader: {
           select: { id: true, trader_name: true, trader_code: true },
         },
         destination: {
           select: { id: true, destination_name: true, destination_type: true },
-        },
-        container: {
-          select: { id: true, container_number: true, container_type: true, weight: true },
         },
       },
     });
@@ -76,10 +74,8 @@ export async function PATCH(
     const { id } = await params;
 
     const {
-      sender_company_id,
       trader_id,
       destination_id,
-      container_id,
       quantity,
       weight,
       notes,
@@ -129,10 +125,8 @@ export async function PATCH(
     const updatedWaybill = await prisma.trip_waybills.update({
       where: { id: waybillId },
       data: {
-        ...(sender_company_id !== undefined && { sender_company_id: sender_company_id ? parseInt(sender_company_id) : null }),
         ...(trader_id !== undefined && { trader_id: trader_id ? parseInt(trader_id) : null }),
         ...(destination_id !== undefined && { destination_id: destination_id ? parseInt(destination_id) : null }),
-        ...(container_id !== undefined && { container_id: container_id ? parseInt(container_id) : null }),
         ...(quantity !== undefined && { quantity: quantity ? parseInt(quantity) : 0 }),
         ...(weight !== undefined && { weight: weight ? parseFloat(weight) : null }),
         ...(newAllocatedFare !== null && { allocated_fare: newAllocatedFare }),
@@ -148,9 +142,6 @@ export async function PATCH(
             plate_back: true,
             truck_fare: true,
           },
-        },
-        sender_company: {
-          select: { id: true, company_name: true, company_code: true },
         },
         trader: {
           select: { id: true, trader_name: true, trader_code: true },

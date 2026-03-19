@@ -199,7 +199,7 @@ model companies {
 
   transit_shipments     transit_shipments[]
   sub_companies         sub_companies[]
-  trip_waybills        trip_waybills[]
+  trip_sources          transport_trips[] @relation("TripSourceCompany")
 }
 
 model sub_companies {
@@ -239,6 +239,9 @@ model depots {
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  trip_sources          transport_trips[] @relation("TripSourceDepot")
+  trip_destinations     transport_trips[] @relation("TripDestinationDepot")
 
   @@index([traderId])
 }
@@ -430,7 +433,7 @@ model shipment_containers {
   notes                      String?   @db.Text
   
   shipment                   transit_shipments @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
-  trip_waybills              trip_waybills[]
+  trip_sources               transport_trips[] @relation("TripSourceContainer")
 }
 
 model shipment_documents {
@@ -489,6 +492,17 @@ model transport_trips {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  route_type            String?   @db.VarChar(50) // E.g., 'DIRECT_FACTORY', 'TRANSIT_PORT', 'INTERNAL_DEPOT'
+  source_company_id     Int?
+  source_container_id   Int?
+  source_depot_id       Int?
+  destination_depot_id  Int?      // Main destination for the truck
+
+  source_company        companies?           @relation("TripSourceCompany", fields: [source_company_id], references: [id])
+  source_container      shipment_containers? @relation("TripSourceContainer", fields: [source_container_id], references: [id])
+  source_depot          depots?              @relation("TripSourceDepot", fields: [source_depot_id], references: [id])
+  destination_depot     depots?              @relation("TripDestinationDepot", fields: [destination_depot_id], references: [id])
+
   gate                gates?               @relation(fields: [gate_id], references: [id])
   transport_company   transport_company?   @relation(fields: [transport_company_id], references: [id])
   waybills            trip_waybills[]
@@ -502,11 +516,8 @@ model trip_waybills {
   id                  Int       @id @default(autoincrement())
   trip_id             Int
   
-  sender_company_id   Int?
   trader_id           Int?
   destination_id      Int?
-  
-  container_id        Int?
   
   invoice_num         String?   @db.VarChar(50)
   quantity            Int?      @default(0)
@@ -524,17 +535,13 @@ model trip_waybills {
   updatedAt           DateTime  @updatedAt
 
   trip                transport_trips      @relation(fields: [trip_id], references: [id], onDelete: Cascade)
-  sender_company      companies?          @relation(fields: [sender_company_id], references: [id])
   trader              traders?            @relation(fields: [trader_id], references: [id])
   destination         destination?        @relation(fields: [destination_id], references: [id])
-  container           shipment_containers? @relation(fields: [container_id], references: [id], onDelete: SetNull)
   invoice_items       invoice_items[]
 
   @@index([trip_id])
-  @@index([sender_company_id])
   @@index([trader_id])
   @@index([destination_id])
-  @@index([container_id])
 }
 
 // Invoice Items (Line Items for each Waybill/Invoice)

@@ -19,7 +19,6 @@ export async function GET(req: Request) {
         ...(status && { status }),
         ...(gateId && { gate_id: parseInt(gateId) }),
         ...(transportCompanyId && { transport_company_id: parseInt(transportCompanyId) }),
-        ...(user.role !== 'ADMIN' && user.teamId && 'teamId' in prisma.transport_trips.fields ? { teamId: user.teamId } : {})
       },
       include: {
         gate: {
@@ -28,11 +27,20 @@ export async function GET(req: Request) {
         transport_company: {
           select: { id: true, trans_name: true },
         },
+        source_company: {
+          select: { id: true, company_name: true },
+        },
+        source_container: {
+          select: { id: true, container_number: true, container_type: true },
+        },
+        source_depot: {
+          select: { id: true, depot_name: true },
+        },
+        destination_depot: {
+          select: { id: true, depot_name: true },
+        },
         waybills: {
           include: {
-            sender_company: {
-              select: { id: true, company_name: true },
-            },
             trader: {
               select: { id: true, trader_name: true, trader_code: true },
             },
@@ -76,6 +84,11 @@ export async function POST(req: Request) {
       discharge_date,
       truck_fare,
       notes,
+      route_type,
+      source_company_id,
+      source_container_id,
+      source_depot_id,
+      destination_depot_id,
       status,
       documents,
     } = body;
@@ -94,11 +107,16 @@ export async function POST(req: Request) {
         discharge_date: discharge_date ? new Date(discharge_date) : null,
         truck_fare: truck_fare ? parseFloat(truck_fare) : null,
         notes: notes || null,
+        route_type: route_type || null,
+        source_company_id: source_company_id ? parseInt(source_company_id.toString()) : null,
+        source_container_id: source_container_id ? parseInt(source_container_id.toString()) : null,
+        source_depot_id: source_depot_id ? parseInt(source_depot_id.toString()) : null,
+        destination_depot_id: destination_depot_id ? parseInt(destination_depot_id.toString()) : null,
         status: status || "DISPATCHED",
         ...(documents && documents.length > 0
           ? {
               documents: {
-                create: documents.map((doc: any) => ({
+                create: documents.map((doc: { document_type: string; document_number?: string; file_url: string; file_name: string }) => ({
                   document_type: doc.document_type,
                   document_number: doc.document_number || null,
                   file_url: doc.file_url,
@@ -107,7 +125,6 @@ export async function POST(req: Request) {
               },
             }
           : {}),
-        ...((user.teamId && 'teamId' in prisma.transport_trips.fields) ? { teamId: user.teamId } : {})
       },
       include: {
         gate: {
