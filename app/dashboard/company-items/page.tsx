@@ -192,6 +192,13 @@ export default function CompanyItemsPage() {
       item.ismain_item === true,
   );
 
+  const availableMainItemsForEdit = data.filter(
+    (item) =>
+      item.company_name.toString() === editData.company_name &&
+      item.ismain_item === true &&
+      item.id !== editData.id // don't show self as parent
+  );
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
@@ -496,6 +503,48 @@ export default function CompanyItemsPage() {
               </div>
             </div>
 
+            {/* Company & Type */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
+              <div className="space-y-2 col-span-2 sm:col-span-1">
+                <Label className="font-bold text-blue-800">
+                  الشركة الموردة (لا يمكن التغيير)
+                </Label>
+                <select
+                  disabled
+                  value={editData.company_name}
+                  className="flex h-10 w-full rounded-xl border border-input bg-slate-100 px-3 py-2 text-sm outline-none cursor-not-allowed"
+                >
+                  <option value="">-- اختر الشركة --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 col-span-2 sm:col-span-1">
+                <Label className="font-bold text-blue-800">
+                  نوع الصنف (التغيير يحدث الكود)
+                </Label>
+                <select
+                  value={editData.item_type}
+                  onChange={(e) =>
+                    setEditData({ ...editData, item_type: e.target.value })
+                  }
+                  className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                >
+                  <option value="">-- اختر النوع --</option>
+                  {types.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.item_type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Names */}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="font-bold">اسم الصنف (عربي)</Label>
@@ -556,7 +605,70 @@ export default function CompanyItemsPage() {
               </div>
             </div>
 
+            {/* Parent/Child status */}
+            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="editIsmain"
+                  checked={editData.ismain_item}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      ismain_item: e.target.checked,
+                      main_item: "",
+                    })
+                  }
+                  className="w-4 h-4 rounded text-primary"
+                />
+                <Label
+                  htmlFor="editIsmain"
+                  className="font-bold cursor-pointer text-emerald-900"
+                >
+                  صنف أساسي (رئيسي)
+                </Label>
+              </div>
+
+              {!editData.ismain_item && (
+                <div className="space-y-2">
+                  <Label className="font-bold flex items-center gap-2 text-emerald-800">
+                    <LinkIcon size={14} /> هذا الصنف نكهة/فرع تابع للمنتج الأساسي:
+                  </Label>
+                  <select
+                    value={editData.main_item}
+                    onChange={(e) =>
+                      setEditData({ ...editData, main_item: e.target.value })
+                    }
+                    className="flex h-10 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                  >
+                    <option value="">-- اختر المنتج الأساسي --</option>
+                    {availableMainItemsForEdit.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.item_ar_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold">الوحدة</Label>
+                <select
+                  value={editData.unit}
+                  onChange={(e) =>
+                    setEditData({ ...editData, unit: e.target.value })
+                  }
+                  className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                >
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.unit_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="space-y-2">
                 <Label className="font-bold">التعبئة</Label>
                 <Input

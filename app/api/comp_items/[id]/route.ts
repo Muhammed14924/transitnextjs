@@ -28,7 +28,32 @@ export async function PATCH(
       GTIP,
       image,
       manufacturer_code,
+      item_type,
+      unit,
     } = body;
+
+    // Fetch existing item to check for changes
+    const existingItem = await prisma.comp_items.findUnique({
+      where: { id: Number(id) },
+      include: { companies: true },
+    });
+    if (!existingItem) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+
+    let composite_code = undefined;
+    const newItemType = item_type === "" ? null : (item_type !== undefined ? Number(item_type) : existingItem.item_type);
+    
+    if (newItemType !== existingItem.item_type) {
+      // item_type changed, regenerate composite_code
+      let typeCode = "000";
+      if (newItemType) {
+        const typeInfo = await prisma.typeofitems.findUnique({
+          where: { id: newItemType },
+        });
+        if (typeInfo) typeCode = typeInfo.typecode;
+      }
+      const formattedItemCode = String(existingItem.item_code).padStart(4, "0");
+      composite_code = `${existingItem.companies.company_code}-${typeCode}-${formattedItemCode}`;
+    }
 
     const updatedItem = await prisma.comp_items.update({
       where: { id: Number(id) },
@@ -51,13 +76,20 @@ export async function PATCH(
         manufacturer_code:
           manufacturer_code !== undefined ? manufacturer_code || null : undefined,
         ismain_item: ismain_item !== undefined ? ismain_item : undefined,
-        main_item: !ismain_item && main_item ? parseInt(main_item) : null,
+        main_item: 
+          ismain_item === true ? null : 
+          main_item !== undefined ? (main_item ? parseInt(main_item) : null) : 
+          undefined,
         isActive: isActive !== undefined ? isActive : undefined,
+        item_type: item_type !== undefined ? (item_type ? parseInt(item_type) : null) : undefined,
+        unit: unit !== undefined ? (unit ? parseInt(unit) : 1) : undefined,
+        composite_code,
       },
     });
 
     return NextResponse.json(updatedItem);
-  } catch {
+  } catch (error: unknown) {
+    console.error("Error updating item:", error);
     return NextResponse.json({ error: "Error updating item" }, { status: 500 });
   }
 }
