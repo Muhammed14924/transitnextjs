@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
   Plus,
   Search,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Clock,
-  Truck,
+  ShipWheel,
   Layers,
   AlertTriangle,
   FileText,
@@ -131,7 +133,7 @@ const shipmentSchema = z.object({
   port_of_discharge: z.string().optional().nullable(),
   arrival_date: z.string().min(1, "تاريخ الوصول المتوقع مطلوب"),
   expected_discharge_date: z.string().optional().nullable(),
-  free_time_days: z.number().int().min(0).default(14),
+  free_time_days: z.number().int().min(0).default(7),
   isActive: z.boolean().default(true),
   containers: z.array(containerSchema).default([]),
   documents: z
@@ -171,6 +173,7 @@ export default function ShipmentsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedShipment, setExpandedShipment] = useState<number | null>(null);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -178,6 +181,14 @@ export default function ShipmentsPage() {
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(
     null,
   );
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "shipment" | "document" | null;
+    shipmentId?: number;
+    docId?: number;
+    formDocIndex?: number;
+    title: string;
+    description: string;
+  }>({ type: null, title: "", description: "" });
 
   // Master Data
   const [companies, setCompanies] = useState<ShipmentCompany[]>([]);
@@ -192,7 +203,7 @@ export default function ShipmentsPage() {
     defaultValues: {
       bl_number: "",
       status: "IN_TRANSIT",
-      free_time_days: 14,
+      free_time_days: 7,
       isActive: true,
       containers: [],
       documents: [],
@@ -203,7 +214,7 @@ export default function ShipmentsPage() {
     form.reset({
       bl_number: "",
       status: "IN_TRANSIT",
-      free_time_days: 14,
+      free_time_days: 7,
       isActive: true,
       containers: [],
       documents: [],
@@ -246,12 +257,12 @@ export default function ShipmentsPage() {
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       const arrival = new Date(watchedArrivalDate);
       arrival.setHours(0, 0, 0, 0);
-      
+
       const diffTime = arrival.getTime() - today.getTime();
-      
+
       if (diffTime > 0) {
         form.setValue("status", "IN_TRANSIT");
       } else {
@@ -292,8 +303,7 @@ export default function ShipmentsPage() {
       if (pts) setPorts(Array.isArray(pts) ? pts : []);
       if (shipComps)
         setShippingComps(Array.isArray(shipComps) ? shipComps : []);
-      if (subComps)
-        setSubCompanies(Array.isArray(subComps) ? subComps : []);
+      if (subComps) setSubCompanies(Array.isArray(subComps) ? subComps : []);
     } catch (e) {
       console.error("Master data fetch error", e);
     }
@@ -324,18 +334,64 @@ export default function ShipmentsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedShipment) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget.type) return;
     try {
-      await apiClient.deleteShipment(selectedShipment.id);
-      setIsDeleteDialogOpen(false);
-      setSelectedShipment(null);
+      if (deleteTarget.type === "shipment" && deleteTarget.shipmentId) {
+        await apiClient.deleteShipment(deleteTarget.shipmentId);
+        toast.success("تم حذف الشحنة بنجاح");
+      } else if (
+        deleteTarget.type === "document" &&
+        deleteTarget.shipmentId &&
+        deleteTarget.docId
+      ) {
+        await apiClient.deleteShipmentDocument(
+          deleteTarget.shipmentId,
+          deleteTarget.docId,
+        );
+        if (typeof deleteTarget.formDocIndex === "number") {
+          removeDoc(deleteTarget.formDocIndex);
+        }
+        toast.success("تم حذف المستند بنجاح");
+      }
       fetchShipments();
-      toast.success("تم حذف الشحنة بنجاح");
     } catch (error) {
-      console.error("Error deleting shipment", error);
+      console.error("Delete error", error);
       toast.error("حدث خطأ أثناء الحذف: " + (error as Error).message);
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setDeleteTarget({ type: null, title: "", description: "" });
+      setSelectedShipment(null);
     }
+  };
+
+  const openDeleteShipmentDialog = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setDeleteTarget({
+      type: "shipment",
+      shipmentId: shipment.id,
+      title: "تأكيد حذف الرحلة",
+      description:
+        "هل أنت متأكد من حذف هذه الرحلة؟ سيتم حذف جميع المستندات المرتبطة بها.",
+    });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const openDeleteDocumentDialog = (
+    shipmentId: number,
+    docId: number,
+    formDocIndex?: number,
+  ) => {
+    setDeleteTarget({
+      type: "document",
+      shipmentId,
+      docId,
+      formDocIndex,
+      title: "تأكيد حذف المستند",
+      description:
+        "هل أنت متأكد من حذف هذا المستند؟ لا يمكن التراجع عن هذا الإجراء.",
+    });
+    setIsDeleteDialogOpen(true);
   };
 
   const openEditDialog = (shipment: Shipment) => {
@@ -388,7 +444,7 @@ export default function ShipmentsPage() {
     if (!file) return;
     setIsUploadingDoc(true);
     try {
-      const res = await apiClient.uploadToS3(file);
+      const res = await apiClient.uploadToS3(file, "shipments");
       if (res?.fileUrl) {
         appendDoc({
           document_type: selectedDocType,
@@ -417,6 +473,10 @@ export default function ShipmentsPage() {
     return map[s] || s;
   };
 
+  const toggleExpand = (shipmentId: number) => {
+    setExpandedShipment(expandedShipment === shipmentId ? null : shipmentId);
+  };
+
   // ===================== UI =====================
   return (
     <div className="space-y-6">
@@ -424,7 +484,7 @@ export default function ShipmentsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Truck className="text-primary" /> إدارة النقل البحري
+            <ShipWheel className="text-primary" /> إدارة النقل البحري
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
             متابعة البوالص، الحاويات، والمستندات الجمركية للشحنات الصادرة
@@ -506,19 +566,32 @@ export default function ShipmentsPage() {
           <Table>
             <TableHeader className="bg-slate-50/50">
               <TableRow className="border-slate-50">
-                <TableHead className="text-right font-black text-slate-400 text-xs px-8 h-14 uppercase">
+                <TableHead className="w-12 px-2" />
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
                   رقم الشحنة / BL
                 </TableHead>
-                <TableHead className="text-right font-black text-slate-400 text-xs px-4 h-14 uppercase">
-                  المرسل / الناقل
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  المرسل
                 </TableHead>
-                <TableHead className="text-right font-black text-slate-400 text-xs px-4 h-14 uppercase">
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  الناقل
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
                   المسار (من → إلى)
                 </TableHead>
-                <TableHead className="text-center font-black text-slate-400 text-xs px-4 h-14 uppercase">
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  ت. الوصول
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  ت. التفريغ
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  Free Time
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
                   الحالة / البيانات
                 </TableHead>
-                <TableHead className="text-center font-black text-slate-400 text-xs px-8 h-14 uppercase">
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
                   الإجراءات
                 </TableHead>
               </TableRow>
@@ -526,142 +599,309 @@ export default function ShipmentsPage() {
             <TableBody>
               {shipmentsData.length > 0 ? (
                 shipmentsData.map((s) => (
-                  <TableRow
-                    key={s.id}
-                    className="hover:bg-slate-50/40 border-slate-50 group"
-                  >
-                    <TableCell className="px-8 py-4">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-black text-primary text-sm">
-                          {s.bl_number || `SH-${s.id}`}
-                        </span>
-                        {s.bl_number && (
-                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
-                            <FileText size={10} /> BL: {s.bl_number}
-                          </span>
-                        )}
-                        <span className="text-[9px] text-slate-300 mt-1">
-                          {new Date(s.createdAt).toLocaleDateString("ar-SA")}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center font-bold text-slate-400 text-[10px]">
-                            {s.sender_company?.company_name?.[0] || "?"}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-800 text-xs">
-                              {s.sender_company?.company_name || "---"}
-                            </span>
-                            {s.sub_company && (
-                              <span className="text-[10px] text-blue-600 font-bold">
-                                ({s.sub_company.sub_company_name})
-                              </span>
-                            )}
-                            <span className="text-[9px] text-slate-400">
-                              المرسل
-                            </span>
-                          </div>
-                        </div>
-                        {s.carrier?.trans_name && (
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-1">
-                            <Ship size={10} className="text-blue-400" />
-                            <span>{s.carrier.trans_name}</span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
-                          <Anchor
-                            size={11}
-                            className="text-blue-500 shrink-0"
-                          />
-                          <span>{s.loading_port?.port_name || "---"}</span>
-                          <span className="text-slate-300 mx-0.5">→</span>
-                          <MapPin
-                            size={11}
-                            className="text-rose-500 shrink-0"
-                          />
-                          <span>{s.discharge_port?.port_name || "---"}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400">
-                          وصول:{" "}
-                          {s.arrival_date
-                            ? new Date(s.arrival_date).toLocaleDateString(
-                                "ar-SA",
-                              )
-                            : "---"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <Badge
-                          className={cn(
-                            "rounded-full px-3 py-0.5 text-[10px] font-bold border-none",
-                            s.status === "DELIVERED"
-                              ? "bg-emerald-50 text-emerald-600"
-                              : s.status === "PENDING"
-                                ? "bg-amber-50 text-amber-600"
-                                : s.status === "ARRIVED"
-                                  ? "bg-violet-50 text-violet-600"
-                                  : "bg-blue-50 text-blue-600",
-                          )}
+                  <Fragment key={s.id}>
+                    <TableRow className="hover:bg-slate-50/40 border-slate-50 group">
+                      <TableCell className="px-2 py-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleExpand(s.id)}
+                          className="h-8 w-8 rounded-lg"
                         >
-                          {statusLabel(s.status)}
-                        </Badge>
-                        <div className="flex gap-3 text-[10px] font-bold text-slate-400">
-                          <span className="flex items-center gap-0.5">
-                            <Layers size={10} /> {s.containers?.length || 0}{" "}
-                            حاوية
+                          {expandedShipment === s.id ? (
+                            <ChevronUp size={16} />
+                          ) : (
+                            <ChevronDown size={16} />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="font-bold text-slate-900 text-sm">
+                            {s.bl_number || `SH-${s.id}`}
+                          </span>
+                          {s.bl_number && (
+                            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                              <FileText size={10} /> BL: {s.bl_number}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-300 mt-0.5">
+                            {new Date(s.createdAt).toLocaleDateString("ar-SA")}
                           </span>
                         </div>
-                        {s.documents && s.documents.length > 0 && (
-                          <span className="text-[9px] text-indigo-500 font-bold">
-                            {s.documents.length} مستند
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="font-semibold text-slate-800 text-xs">
+                            {s.sender_company?.company_name || "—"}
                           </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-8 py-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {canWrite && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditDialog(s)}
-                              className="h-9 w-9 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-xl"
-                              title="تعديل"
-                            >
-                              <Edit size={16} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setSelectedShipment(s);
-                                setIsDeleteDialogOpen(true);
-                              }}
-                              className="h-9 w-9 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
-                              title="حذف"
-                            >
-                              <Trash2 size={16} />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                          {s.sub_company && (
+                            <span className="text-[10px] text-blue-600 font-medium">
+                              ({s.sub_company.sub_company_name})
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1 text-[10px] text-slate-600">
+                          <Ship size={10} className="text-blue-400" />
+                          <span className="font-semibold text-xs">
+                            {s.carrier?.trans_name || "—"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-600">
+                            <Anchor
+                              size={11}
+                              className="text-blue-500 shrink-0"
+                            />
+                            <span>{s.loading_port?.port_name || "---"}</span>
+                            <span className="text-slate-300 mx-0.5">→</span>
+                            <MapPin
+                              size={11}
+                              className="text-rose-500 shrink-0"
+                            />
+                            <span>{s.discharge_port?.port_name || "---"}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap text-xs">
+                        {s.arrival_date
+                          ? new Date(s.arrival_date).toLocaleDateString("ar-SA")
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap text-xs">
+                        {s.expected_discharge_date
+                          ? new Date(
+                              s.expected_discharge_date,
+                            ).toLocaleDateString("ar-SA")
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-center py-3 whitespace-nowrap text-xs">
+                        <span className="font-mono font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                          {s.free_time_days ?? "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <Badge
+                            className={cn(
+                              "rounded-full px-3 py-0.5 text-[10px] font-bold border-none",
+                              s.status === "DELIVERED"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : s.status === "PENDING"
+                                  ? "bg-amber-50 text-amber-600"
+                                  : s.status === "ARRIVED"
+                                    ? "bg-violet-50 text-violet-600"
+                                    : "bg-blue-50 text-blue-600",
+                            )}
+                          >
+                            {statusLabel(s.status)}
+                          </Badge>
+                          <div className="flex gap-3 text-[10px] font-medium text-slate-500">
+                            <span className="flex items-center gap-0.5">
+                              <Layers size={10} /> {s.containers?.length || 0}{" "}
+                              حاوية
+                            </span>
+                          </div>
+                          <span
+                            className={cn(
+                              "text-[10px] font-semibold",
+                              s.isActive === false
+                                ? "text-rose-500"
+                                : "text-emerald-600",
+                            )}
+                          >
+                            {s.isActive === false ? "موقوفة" : "نشطة"}
+                          </span>
+                          {s.documents && s.documents.length > 0 && (
+                            <span className="text-[10px] text-indigo-500 font-semibold">
+                              {s.documents.length} مستند
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(s)}
+                            className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg"
+                            title="تعديل"
+                            disabled={!canWrite}
+                          >
+                            <Edit size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteShipmentDialog(s)}
+                            className="h-8 w-8 text-rose-500 hover:bg-rose-50 rounded-lg"
+                            title="حذف"
+                            disabled={!canWrite}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {expandedShipment === s.id && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="bg-slate-50 p-4">
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="font-bold text-sm flex items-center gap-2 mb-3">
+                                <Layers size={16} />
+                                تفاصيل الحاويات ({s.containers?.length || 0})
+                              </h4>
+                              {s.containers && s.containers.length > 0 ? (
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-white">
+                                      <TableHead className="text-right text-xs">
+                                        رقم الحاوية
+                                      </TableHead>
+                                      <TableHead className="text-center text-xs">
+                                        النوع
+                                      </TableHead>
+                                      <TableHead className="text-center text-xs">
+                                        الوزن
+                                      </TableHead>
+                                      <TableHead className="text-center text-xs">
+                                        البيان الجمركي
+                                      </TableHead>
+                                      <TableHead className="text-center text-xs">
+                                        العدد
+                                      </TableHead>
+                                      <TableHead className="text-right text-xs">
+                                        ملاحظات
+                                      </TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {s.containers.map((container) => (
+                                      <TableRow
+                                        key={container.id}
+                                        className="bg-white"
+                                      >
+                                        <TableCell className="text-xs font-mono">
+                                          {container.container_number || "—"}
+                                        </TableCell>
+                                        <TableCell className="text-center text-xs">
+                                          {container.container_type || "—"}
+                                        </TableCell>
+                                        <TableCell className="text-center text-xs font-mono">
+                                          {container.weight
+                                            ? Number(
+                                                container.weight,
+                                              ).toLocaleString()
+                                            : "—"}
+                                        </TableCell>
+                                        <TableCell className="text-center text-xs">
+                                          {container.customs_declaration_number ||
+                                            "—"}
+                                        </TableCell>
+                                        <TableCell className="text-center text-xs">
+                                          {container.item_count || "—"}
+                                        </TableCell>
+                                        <TableCell className="text-xs text-slate-600">
+                                          {container.notes || "—"}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              ) : (
+                                <p className="text-sm text-slate-400 text-center py-4 bg-white rounded-xl border border-slate-100">
+                                  لا توجد حاويات لهذه الشحنة
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-200">
+                              <h4 className="font-bold text-sm flex items-center gap-2 mb-3">
+                                <FileText size={16} />
+                                المستندات ({s.documents?.length || 0})
+                              </h4>
+                              {s.documents && s.documents.length > 0 ? (
+                                <div className="flex flex-wrap gap-3">
+                                  {s.documents.map((doc) => (
+                                    <div
+                                      key={doc.id}
+                                      className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:border-primary/20 transition-all min-w-[250px]"
+                                    >
+                                      <div className="h-10 w-10 shrink-0 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-500">
+                                        <FileText size={18} />
+                                      </div>
+                                      <div className="flex flex-col flex-1 min-w-0 text-right">
+                                        <span className="text-sm font-bold text-slate-700 truncate block">
+                                          {doc.file_name}
+                                        </span>
+                                        <div className="flex items-center justify-end gap-2 mt-0.5">
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[9px] py-0 px-1.5 rounded-full border-slate-200"
+                                          >
+                                            {DOCUMENT_TYPES.find(
+                                              (t) =>
+                                                t.value === doc.document_type,
+                                            )?.label || doc.document_type}
+                                          </Badge>
+                                          {doc.document_number && (
+                                            <span className="text-[10px] text-slate-400">
+                                              #{doc.document_number}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() =>
+                                            window.open(doc.file_url, "_blank")
+                                          }
+                                          className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
+                                        >
+                                          <Search size={14} />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() =>
+                                            openDeleteDocumentDialog(
+                                              s.id,
+                                              doc.id,
+                                            )
+                                          }
+                                          className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
+                                          disabled={!canWrite}
+                                        >
+                                          <Trash2 size={14} />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-400 text-center py-4 bg-white rounded-xl border border-slate-100">
+                                  لا توجد مستندات مرفوعة
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={10}
                     className="text-center py-20 text-slate-300 font-bold italic"
                   >
                     {loading
@@ -828,7 +1068,8 @@ export default function ShipmentsPage() {
                   {...form.register("arrival_date")}
                   className={cn(
                     "rounded-2xl h-12 bg-slate-50 border-none px-5",
-                    form.formState.errors.arrival_date && "ring-2 ring-rose-500"
+                    form.formState.errors.arrival_date &&
+                      "ring-2 ring-rose-500",
                   )}
                 />
                 {form.formState.errors.arrival_date && (
@@ -860,7 +1101,9 @@ export default function ShipmentsPage() {
 
               {/* -- Status & isActive -- */}
               <div className="space-y-2 text-right opacity-80 pointer-events-none">
-                <Label className="font-bold text-slate-700 pr-1">الحالة (يتم حسابها آلياً)</Label>
+                <Label className="font-bold text-slate-700 pr-1">
+                  الحالة (يتم حسابها آلياً)
+                </Label>
                 <select
                   {...form.register("status")}
                   className="w-full h-12 rounded-2xl bg-slate-100 border-none px-5 text-sm font-black text-primary"
@@ -870,7 +1113,9 @@ export default function ShipmentsPage() {
                   <option value="ARRIVED">📍 وصلت المينا</option>
                   <option value="DELIVERED">✅ تم الاستلام</option>
                 </select>
-                <p className="text-[10px] text-slate-400 font-bold px-2">يتم تحديث الحالة تلقائياً بناءً على تاريخ الوصول المتوقع</p>
+                <p className="text-[10px] text-slate-400 font-bold px-2">
+                  يتم تحديث الحالة تلقائياً بناءً على تاريخ الوصول المتوقع
+                </p>
               </div>
               <div className="flex items-center gap-3 text-right mt-6">
                 <input
@@ -940,7 +1185,7 @@ export default function ShipmentsPage() {
 
                 {/* List of uploaded documents in Form */}
                 <div className="space-y-3 mt-4">
-                  {(docFields as any[]).map((doc, index: number) => (
+                  {docFields.map((doc, index: number) => (
                     <div
                       key={doc.id}
                       className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group"
@@ -987,21 +1232,12 @@ export default function ShipmentsPage() {
                           onClick={async () => {
                             if (doc.dbId) {
                               // Existing doc in DB
-                              if (
-                                confirm(
-                                  "هل أنت متأكد من حذف هذا المستند نهائياً؟ سيتم حذفه من السيرفر أيضاً.",
-                                )
-                              ) {
-                                try {
-                                  await apiClient.deleteShipmentDocument(
-                                    selectedShipment!.id,
-                                    doc.dbId,
-                                  );
-                                  removeDoc(index);
-                                  toast.success("تم حذف المستند بنجاح");
-                                } catch {
-                                  toast.error("فشل حذف المستند");
-                                }
+                              if (selectedShipment?.id) {
+                                openDeleteDocumentDialog(
+                                  selectedShipment.id,
+                                  doc.dbId,
+                                  index,
+                                );
                               }
                             } else {
                               // New doc not yet in DB
@@ -1194,22 +1430,32 @@ export default function ShipmentsPage() {
           className="sm:max-w-[400px] rounded-3xl p-8 border-none text-right"
           dir="rtl"
         >
-          <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
-            <AlertTriangle className="text-rose-600" size={32} />
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <AlertTriangle className="text-rose-600" size={32} />
+            </div>
+            <DialogTitle className="font-black text-slate-900 text-xl">
+              {deleteTarget.title}
+            </DialogTitle>
+            <DialogDescription className="font-bold text-slate-500 py-4">
+              {deleteTarget.type === "shipment" ? (
+                <>
+                  هل أنت متأكد من حذف الشحنة{" "}
+                  <strong>
+                    {selectedShipment?.bl_number ||
+                      `SH-${selectedShipment?.id}`}
+                  </strong>
+                  ؟ سيتم حذف جميع المستندات المرتبطة. هذا الإجراء لا يمكن
+                  التراجع عنه.
+                </>
+              ) : (
+                deleteTarget.description
+              )}
+            </DialogDescription>
           </div>
-          <DialogTitle className="font-black text-slate-900 text-xl">
-            تأكيد الحذف
-          </DialogTitle>
-          <DialogDescription className="font-bold text-slate-500 py-4">
-            هل أنت متأكد من حذف الشحنة{" "}
-            <strong>
-              {selectedShipment?.bl_number || `SH-${selectedShipment?.id}`}
-            </strong>
-            ؟ سيتم حذف جميع المستندات المرتبطة. هذا الإجراء لا يمكن التراجع عنه.
-          </DialogDescription>
-          <DialogFooter className="gap-3 mt-4">
+          <DialogFooter className="gap-3 mt-4 flex sm:justify-center">
             <Button
-              onClick={handleDelete}
+              onClick={confirmDelete}
               className="rounded-2xl h-12 flex-1 bg-rose-600 font-bold hover:bg-rose-700 transition-colors"
             >
               نعم، احذف

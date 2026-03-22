@@ -200,6 +200,7 @@ model companies {
   transit_shipments     transit_shipments[]
   sub_companies         sub_companies[]
   trip_sources          transport_trips[] @relation("TripSourceCompany")
+  waybill_exporters     trip_waybills[] @relation("WaybillSenderCompany")
 }
 
 model sub_companies {
@@ -419,6 +420,7 @@ model transit_shipments {
   
   documents           shipment_documents[]
   containers          shipment_containers[]
+  transport_trips     transport_trips[]     @relation("TripSourceShipment")
 }
 
 model shipment_containers {
@@ -494,11 +496,13 @@ model transport_trips {
 
   route_type            String?   @db.VarChar(50) // E.g., 'DIRECT_FACTORY', 'TRANSIT_PORT', 'INTERNAL_DEPOT'
   source_company_id     Int?
+  source_shipment_id    Int?      // Link to the sea shipment if route_type is PORT
   source_container_id   Int?
   source_depot_id       Int?
   destination_depot_id  Int?      // Main destination for the truck
 
   source_company        companies?           @relation("TripSourceCompany", fields: [source_company_id], references: [id])
+  source_shipment       transit_shipments?   @relation("TripSourceShipment", fields: [source_shipment_id], references: [id])
   source_container      shipment_containers? @relation("TripSourceContainer", fields: [source_container_id], references: [id])
   source_depot          depots?              @relation("TripSourceDepot", fields: [source_depot_id], references: [id])
   destination_depot     depots?              @relation("TripDestinationDepot", fields: [destination_depot_id], references: [id])
@@ -518,8 +522,11 @@ model trip_waybills {
   
   trader_id           Int?
   destination_id      Int?
+  sender_company_id   Int?
+
   
   invoice_num         String?   @db.VarChar(50)
+  receipt_num         String?   @db.VarChar(5)
   quantity            Int?      @default(0)
   weight              Decimal?  @db.Decimal(12, 2)
   
@@ -537,11 +544,13 @@ model trip_waybills {
   trip                transport_trips      @relation(fields: [trip_id], references: [id], onDelete: Cascade)
   trader              traders?            @relation(fields: [trader_id], references: [id])
   destination         destination?        @relation(fields: [destination_id], references: [id])
+  sender_company      companies?          @relation("WaybillSenderCompany", fields: [sender_company_id], references: [id])
   invoice_items       invoice_items[]
 
   @@index([trip_id])
   @@index([trader_id])
   @@index([destination_id])
+  @@index([sender_company_id])
 }
 
 // Invoice Items (Line Items for each Waybill/Invoice)

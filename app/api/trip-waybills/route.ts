@@ -36,6 +36,9 @@ export async function GET(req: Request) {
         destination: {
           select: { id: true, destination_name: true },
         },
+        sender_company: {
+          select: { id: true, company_name: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -62,6 +65,7 @@ export async function POST(req: Request) {
       trip_id,
       trader_id,
       destination_id,
+      sender_company_id,
       quantity,
       weight,
       notes,
@@ -108,14 +112,14 @@ export async function POST(req: Request) {
       }
     }
 
-    // Generate invoice_num using source company from trip
+    // Generate invoice_num using sender_company_id from waybill payload
     let invoice_num = null;
-    if (trip.source_company_id) {
-      const sourceCompanyId = trip.source_company_id;
+    if (sender_company_id) {
+      const sourceCompanyId = parseInt(sender_company_id);
       
-      // Get the latest invoice number for this source company across ANY trip
+      // Get the latest invoice number for this source company across ANY waybill
       const lastWaybill = await prisma.trip_waybills.findFirst({
-        where: { trip: { source_company_id: sourceCompanyId } },
+        where: { sender_company_id: sourceCompanyId },
         orderBy: { invoice_num: "desc" },
       });
 
@@ -141,6 +145,7 @@ export async function POST(req: Request) {
         trip_id: tripId,
         trader_id: trader_id ? parseInt(trader_id) : null,
         destination_id: destination_id ? parseInt(destination_id) : null,
+        sender_company_id: sender_company_id ? parseInt(sender_company_id) : null,
         invoice_num,
         quantity: quantity ? parseInt(quantity) : 0,
         weight: weight ? parseFloat(weight) : null,
@@ -163,6 +168,9 @@ export async function POST(req: Request) {
         },
         destination: {
           select: { id: true, destination_name: true },
+        },
+        sender_company: {
+          select: { id: true, company_name: true },
         },
       },
     });
@@ -210,6 +218,9 @@ export async function POST(req: Request) {
         },
         destination: {
           select: { id: true, destination_name: true },
+        },
+        sender_company: {
+          select: { id: true, company_name: true },
         },
       },
     });

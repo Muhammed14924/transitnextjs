@@ -12,6 +12,7 @@ import {
   Edit,
   Trash2,
   Wallet,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
@@ -28,6 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
@@ -114,6 +117,10 @@ export default function TradersPage() {
     isActive: true,
   });
 
+  // Delete dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+
   // حالة التعديل
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editData, setEditData] = useState({
@@ -198,15 +205,27 @@ export default function TradersPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من الحذف؟")) return;
+  const openDeleteDialog = (id: number, name: string) => {
+    setDeleteTarget({ id, name });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await apiClient.deleteTrader(id);
+      await apiClient.deleteTrader(deleteTarget.id);
       toast.success("تم الحذف بنجاح");
+      setIsDeleteDialogOpen(false);
+      setDeleteTarget(null);
       fetchData();
     } catch (e) {
       toast.error("خطأ في الحذف");
     }
+  };
+
+  const handleDelete = async (id: number) => {
+    const item = data.find((d) => d.id === id);
+    openDeleteDialog(id, item?.trader_name || "هذا التاجر");
   };
 
   // فلترة البيانات بناءً على البحث
@@ -688,6 +707,43 @@ export default function TradersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent
+          className="sm:max-w-[420px] rounded-[32px] p-8 border-none shadow-2xl"
+          dir="rtl"
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <AlertTriangle className="text-rose-600" size={32} />
+            </div>
+            <DialogTitle className="font-black text-slate-900 text-xl">
+              حذف التاجر
+            </DialogTitle>
+            <DialogDescription className="font-bold text-slate-500 py-4">
+              هل أنت متأكد من حذف التاجر{" "}
+              <strong className="text-slate-900">{deleteTarget?.name}</strong>
+              ？ هذا الإجراء لا يمكن التراجع عنه.
+            </DialogDescription>
+          </div>
+          <DialogFooter className="gap-3 mt-4 flex sm:justify-center">
+            <Button
+              onClick={confirmDelete}
+              className="rounded-2xl h-12 flex-1 bg-rose-600 font-bold hover:bg-rose-700 transition-colors"
+            >
+              نعم، احذف
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="rounded-2xl h-12 flex-1 font-bold"
+            >
+              تراجع
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

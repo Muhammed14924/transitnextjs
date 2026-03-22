@@ -12,6 +12,14 @@ import {
   LayoutGrid,
   BarChart2,
   Image as ImageIcon,
+  AlertTriangle,
+  RefreshCw,
+  Upload,
+  Search,
+  CopyPlus,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/app/lib/utils";
@@ -32,6 +40,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
@@ -83,6 +93,99 @@ export default function CompanyItemsPage() {
   const [editData, setEditData] = useState<any>(initialAddState);
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
 
+  // Delete dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // Add flavors state
+  const [isAddFlavorsOpen, setIsAddFlavorsOpen] = useState(false);
+  const [selectedMainItemForFlavors, setSelectedMainItemForFlavors] = useState<any>(null);
+  const [flavorsList, setFlavorsList] = useState<{name: string, generatedName: string}[]>([]);
+  const [flavorInput, setFlavorInput] = useState("");
+  const [isSavingFlavors, setIsSavingFlavors] = useState(false);
+
+  const generateFlavorName = (mainName: string, flavor: string) => {
+    const match = mainName.match(/^(.*?)(\s*\d+.*)$/);
+    if (match) {
+       return `${match[1].trim()} ${flavor} ${match[2].trim()}`;
+    }
+    return `${mainName} ${flavor}`;
+  };
+
+  const handleAddFlavor = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!flavorInput.trim() || !selectedMainItemForFlavors) return;
+    const generatedName = generateFlavorName(selectedMainItemForFlavors.item_ar_name, flavorInput.trim());
+    setFlavorsList([...flavorsList, { name: flavorInput.trim(), generatedName }]);
+    setFlavorInput("");
+  };
+
+  const handleRemoveFlavor = (index: number) => {
+    setFlavorsList(flavorsList.filter((_, i) => i !== index));
+  };
+
+  const handleSaveFlavors = async () => {
+    if (flavorsList.length === 0 || !selectedMainItemForFlavors) return;
+    setIsSavingFlavors(true);
+    try {
+      for (const flavor of flavorsList) {
+         const payload = {
+            item_ar_name: flavor.generatedName,
+            item_en_name: selectedMainItemForFlavors.item_en_name || "",
+            company_name: selectedMainItemForFlavors.company_name,
+            item_type: selectedMainItemForFlavors.item_type || null,
+            unit: selectedMainItemForFlavors.unit,
+            price: selectedMainItemForFlavors.price,
+            weight: selectedMainItemForFlavors.weight,
+            package: selectedMainItemForFlavors.package,
+            packet_weight: selectedMainItemForFlavors.packet_weight,
+            date_exp: selectedMainItemForFlavors.date_exp,
+            GTIP: selectedMainItemForFlavors.GTIP,
+            image: selectedMainItemForFlavors.image,
+            manufacturer_code: null,
+            ismain_item: false,
+            main_item: selectedMainItemForFlavors.id,
+            isActive: true
+         };
+         await apiClient.createCompItem(payload);
+      }
+      toast.success("تم إضافة النكهات بنجاح");
+      setIsAddFlavorsOpen(false);
+      setFlavorsList([]);
+      fetchData();
+    } catch (_e: any) {
+      toast.error("حدث خطأ أثناء حفظ النكهات");
+    } finally {
+      setIsSavingFlavors(false);
+    }
+  };
+
+  const filteredData = data.filter((item: any) => {
+    const searchStr = searchTerm.toLowerCase().trim();
+    if (!searchStr) return true;
+    return (
+      item.item_ar_name?.toLowerCase().includes(searchStr) ||
+      item.item_en_name?.toLowerCase().includes(searchStr) ||
+      item.composite_code?.toLowerCase().includes(searchStr) ||
+      item.internal_code?.toString().includes(searchStr) ||
+      item.manufacturer_code?.toLowerCase().includes(searchStr) ||
+      item.companies?.company_name?.toLowerCase().includes(searchStr)
+    );
+  });
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const currentData = filteredData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const fetchData = async () => {
     try {
       const [itemsRes, compRes, typesRes, unitsRes] = await Promise.all([
@@ -113,9 +216,9 @@ export default function CompanyItemsPage() {
     try {
       let uploadedImageUrl = addData.image;
       if (imageFile) {
-        const uploadRes = await apiClient.uploadFile(imageFile);
-        if (uploadRes && uploadRes.url) {
-          uploadedImageUrl = uploadRes.url;
+        const uploadRes = await apiClient.uploadToS3(imageFile);
+        if (uploadRes && uploadRes.fileUrl) {
+          uploadedImageUrl = uploadRes.fileUrl;
         }
       }
 
@@ -155,9 +258,9 @@ export default function CompanyItemsPage() {
     try {
       let uploadedImageUrl = editData.image;
       if (editImageFile) {
-        const uploadRes = await apiClient.uploadFile(editImageFile);
-        if (uploadRes && uploadRes.url) {
-          uploadedImageUrl = uploadRes.url;
+        const uploadRes = await apiClient.uploadToS3(editImageFile);
+        if (uploadRes && uploadRes.fileUrl) {
+          uploadedImageUrl = uploadRes.fileUrl;
         }
       }
 
@@ -174,15 +277,27 @@ export default function CompanyItemsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من الحذف؟")) return;
+  const openDeleteDialog = (id: number, name: string) => {
+    setDeleteTarget({ id, name });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await apiClient.deleteCompItem(id);
+      await apiClient.deleteCompItem(deleteTarget.id);
       toast.success("تم الحذف بنجاح");
+      setIsDeleteDialogOpen(false);
+      setDeleteTarget(null);
       fetchData();
     } catch (_e) {
       toast.error("خطأ في الحذف");
     }
+  };
+
+  const handleDelete = async (id: number) => {
+    const item = data.find((d) => d.id === id);
+    openDeleteDialog(id, item?.item_ar_name || "هذا الصنف");
   };
 
   // filter main items for selected company to show in parent item list
@@ -196,7 +311,7 @@ export default function CompanyItemsPage() {
     (item) =>
       item.company_name.toString() === editData.company_name &&
       item.ismain_item === true &&
-      item.id !== editData.id // don't show self as parent
+      item.id !== editData.id, // don't show self as parent
   );
 
   return (
@@ -217,7 +332,7 @@ export default function CompanyItemsPage() {
               dir="rtl"
             >
               <DialogHeader>
-                <DialogTitle className="text-xl font-bold border-b pb-4">
+                <DialogTitle className="text-xl font-bold border-b pb-4 text-right">
                   إضافة صنف جديد للشركة
                 </DialogTitle>
               </DialogHeader>
@@ -293,7 +408,10 @@ export default function CompanyItemsPage() {
                     <Input
                       value={addData.manufacturer_code}
                       onChange={(e) =>
-                        setAddData({ ...addData, manufacturer_code: e.target.value })
+                        setAddData({
+                          ...addData,
+                          manufacturer_code: e.target.value,
+                        })
                       }
                       className="rounded-xl"
                       placeholder="Ref Code..."
@@ -454,14 +572,70 @@ export default function CompanyItemsPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="font-bold">صورة المنتج</Label>
-                  <Input
-                    type="file"
-                    accept="image/jpeg, image/png, image/webp"
-                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                    className="rounded-xl"
-                  />
+                {/* Product Image Section */}
+                <div className="space-y-4">
+                  <Label className="font-bold text-slate-700 flex items-center gap-2">
+                    <ImageIcon size={16} /> صورة المنتج
+                  </Label>
+                  
+                  <div className="flex flex-col items-center gap-4 p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 hover:bg-slate-50 hover:border-primary/30 transition-all group relative overflow-hidden">
+                    {imageFile || addData.image ? (
+                      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-4 ring-slate-50">
+                        <div className="aspect-video relative overflow-hidden flex items-center justify-center bg-slate-100">
+                          <img 
+                            src={imageFile ? URL.createObjectURL(imageFile) : addData.image} 
+                            alt="Preview" 
+                            className="w-full h-full object-contain" 
+                          />
+                        </div>
+                        <div className="p-3 border-t bg-slate-50 flex items-center justify-between">
+                          <span className="text-xs font-medium text-slate-500 truncate max-w-[200px]">
+                            {imageFile ? imageFile.name : "صورة المنتج الحالية"}
+                          </span>
+                          <div className="flex gap-2">
+                             <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 p-0 rounded-full border-rose-200 text-rose-500 hover:bg-rose-50 hover:border-rose-300 shadow-sm"
+                              onClick={() => {
+                                setImageFile(null);
+                                setAddData({...addData, image: ""});
+                              }}
+                              title="حذف الصورة"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                            <label className="h-8 w-8 flex items-center justify-center bg-white border border-slate-200 text-blue-500 rounded-full cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all shadow-sm" title="تعديل الصورة">
+                              <RefreshCw size={14} />
+                              <input 
+                                type="file" 
+                                className="hidden" 
+                                accept="image/jpeg, image/png, image/webp"
+                                onChange={(e) => setImageFile(e.target.files?.[0] || null)} 
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="w-full cursor-pointer py-10 flex flex-col items-center gap-3">
+                        <div className="h-16 w-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:scale-110 transition-all text-slate-400 group-hover:text-primary group-hover:shadow-md">
+                          <Upload size={28} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-bold text-slate-700">اضغط هنا لرفع صورة المنتج</p>
+                          <p className="text-[10px] text-slate-500 mt-1">PNG, JPG, WEBP (بحد أقصى 5MB)</p>
+                        </div>
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/jpeg, image/png, image/webp"
+                          onChange={(e) => setImageFile(e.target.files?.[0] || null)} 
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
 
                 <Button
@@ -483,7 +657,7 @@ export default function CompanyItemsPage() {
           dir="rtl"
         >
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold border-b pb-4">
+            <DialogTitle className="text-xl font-bold border-b pb-4 text-right">
               تعديل بيانات الصنف
             </DialogTitle>
           </DialogHeader>
@@ -572,7 +746,10 @@ export default function CompanyItemsPage() {
                 <Input
                   value={editData.manufacturer_code}
                   onChange={(e) =>
-                    setEditData({ ...editData, manufacturer_code: e.target.value })
+                    setEditData({
+                      ...editData,
+                      manufacturer_code: e.target.value,
+                    })
                   }
                   className="rounded-xl"
                 />
@@ -632,7 +809,8 @@ export default function CompanyItemsPage() {
               {!editData.ismain_item && (
                 <div className="space-y-2">
                   <Label className="font-bold flex items-center gap-2 text-emerald-800">
-                    <LinkIcon size={14} /> هذا الصنف نكهة/فرع تابع للمنتج الأساسي:
+                    <LinkIcon size={14} /> هذا الصنف نكهة/فرع تابع للمنتج
+                    الأساسي:
                   </Label>
                   <select
                     value={editData.main_item}
@@ -723,19 +901,70 @@ export default function CompanyItemsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="font-bold">تحديث صورة المنتج</Label>
-              <Input
-                type="file"
-                accept="image/jpeg, image/png, image/webp"
-                onChange={(e) => setEditImageFile(e.target.files?.[0] || null)}
-                className="rounded-xl"
-              />
-              {editData.image && !editImageFile && (
-                <p className="text-xs text-slate-500 mt-1">
-                  المنتج يمتلك صورة حالياً، ارفع ملف جديد لتغييرها.
-                </p>
-              )}
+            {/* Product Image Section (Edit) */}
+            <div className="space-y-4">
+              <Label className="font-bold text-slate-700 flex items-center gap-2">
+                <ImageIcon size={16} /> صورة المنتج
+              </Label>
+              
+              <div className="flex flex-col items-center gap-4 p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 hover:bg-slate-50 hover:border-primary/30 transition-all group relative overflow-hidden">
+                {editImageFile || editData.image ? (
+                  <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-4 ring-slate-50">
+                    <div className="aspect-video relative overflow-hidden flex items-center justify-center bg-slate-100">
+                      <img 
+                        src={editImageFile ? URL.createObjectURL(editImageFile) : editData.image} 
+                        alt="Preview" 
+                        className="w-full h-full object-contain" 
+                      />
+                    </div>
+                    <div className="p-3 border-t bg-slate-50 flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-500 truncate max-w-[200px]">
+                        {editImageFile ? editImageFile.name : "صورة المنتج الحالية"}
+                      </span>
+                      <div className="flex gap-2">
+                         <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 p-0 rounded-full border-rose-200 text-rose-500 hover:bg-rose-50 hover:border-rose-300 shadow-sm"
+                          onClick={() => {
+                            setEditImageFile(null);
+                            setEditData({...editData, image: ""});
+                          }}
+                          title="حذف الصورة"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                        <label className="h-8 w-8 flex items-center justify-center bg-white border border-slate-200 text-blue-500 rounded-full cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all shadow-sm" title="تعديل الصورة">
+                          <RefreshCw size={14} />
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/jpeg, image/png, image/webp"
+                            onChange={(e) => setEditImageFile(e.target.files?.[0] || null)} 
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="w-full cursor-pointer py-10 flex flex-col items-center gap-3">
+                    <div className="h-16 w-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:scale-110 transition-all text-slate-400 group-hover:text-primary group-hover:shadow-md">
+                      <Upload size={28} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-slate-700">اضغط هنا لتحديث صورة المنتج</p>
+                      <p className="text-[10px] text-slate-500 mt-1">PNG, JPG, WEBP (بحد أقصى 5MB)</p>
+                    </div>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/jpeg, image/png, image/webp"
+                      onChange={(e) => setEditImageFile(e.target.files?.[0] || null)} 
+                    />
+                  </label>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-2 pt-2">
@@ -803,65 +1032,82 @@ export default function CompanyItemsPage() {
 
       <Card className="rounded-2xl border-none shadow-sm bg-white overflow-hidden mt-6">
         <CardContent className="p-0">
+          <div className="p-4 border-b bg-slate-50/30 flex items-center justify-between gap-4">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <Input
+                placeholder="بحث عن صنف، شركة، كود..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pr-10 bg-white border-slate-200 focus-visible:ring-primary/20 rounded-xl"
+              />
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              تم العثور على <span className="text-primary font-bold">{filteredData.length}</span> صنف
+            </p>
+          </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50/50">
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الشركة
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الكود المركب
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     تسلسل داخلي
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     رقم الصنف
                   </TableHead>
                   <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الصورة
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الاسم (عربي)
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الاسم (أجنبي)
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     كود المصنع
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     النوع
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الوحدة
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     التعبئة
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الوزن
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الوزن القائم
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     السعر
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     صلاحية
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     GTIP
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     المرجع (الأب)
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     أساسي/فرعي
                   </TableHead>
-                  <TableHead className="text-right font-bold py-4 whitespace-nowrap">
+                  <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الحالة
                   </TableHead>
                   <TableHead className="text-center font-bold py-4 whitespace-nowrap">
@@ -876,25 +1122,25 @@ export default function CompanyItemsPage() {
                       جاري التحميل...
                     </TableCell>
                   </TableRow>
-                ) : data.length === 0 ? (
+                ) : filteredData.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={20}
                       className="text-center py-8 text-slate-500"
                     >
-                      لا توجد أصناف
+                      لا توجد نتائج بحث تطابق &quot;{searchTerm}&quot;
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.map((item: any) => (
+                  currentData.map((item: any) => (
                     <TableRow
                       key={item.id}
                       className={!item.ismain_item ? "bg-slate-50/30" : ""}
                     >
-                      <TableCell className="font-bold text-blue-900 whitespace-nowrap">
+                      <TableCell className="font-bold text-blue-900 whitespace-nowrap text-center">
                         {item.companies?.company_name}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         <Badge
                           variant="outline"
                           className="font-mono text-sm bg-indigo-50 border-indigo-200 text-indigo-700"
@@ -902,13 +1148,13 @@ export default function CompanyItemsPage() {
                           {item.composite_code || "—"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-mono text-emerald-700 whitespace-nowrap">
+                      <TableCell className="font-mono text-emerald-700 whitespace-nowrap text-center">
                         {item.internal_code}
                       </TableCell>
-                      <TableCell className="font-mono text-slate-700 whitespace-nowrap">
+                      <TableCell className="font-mono text-slate-700 whitespace-nowrap text-center">
                         {item.item_code}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         {item.image ? (
                           <div className="w-10 h-10 mx-auto rounded overflow-hidden border border-slate-200 bg-white flex items-center justify-center">
                             <Image
@@ -925,54 +1171,54 @@ export default function CompanyItemsPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-bold text-gray-900 whitespace-nowrap">
+                      <TableCell className="font-bold text-gray-900 whitespace-nowrap text-center">
                         {item.item_ar_name}
                       </TableCell>
                       <TableCell
-                        className="text-gray-700 whitespace-nowrap"
+                        className="text-gray-700 whitespace-nowrap text-center"
                         dir="ltr"
                       >
                         {item.item_en_name || "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-blue-600 whitespace-nowrap">
+                      <TableCell className="font-mono text-blue-600 whitespace-nowrap text-center">
                         {item.manufacturer_code || "—"}
                       </TableCell>
-                      <TableCell className="text-gray-600 whitespace-nowrap">
+                      <TableCell className="text-gray-600 whitespace-nowrap text-center">
                         {item.typeofitems?.item_type || "—"}
                       </TableCell>
-                      <TableCell className="text-gray-600 whitespace-nowrap">
+                      <TableCell className="text-gray-600 whitespace-nowrap text-center">
                         {item.units?.unit_name || "—"}
                       </TableCell>
                       <TableCell
-                        className="font-mono text-gray-600 whitespace-nowrap"
+                        className="font-mono text-gray-600 whitespace-nowrap text-center"
                         dir="ltr"
                       >
                         {item.package || "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-gray-600 whitespace-nowrap">
+                      <TableCell className="font-mono text-gray-600 whitespace-nowrap text-center">
                         {item.weight || 0}
                       </TableCell>
-                      <TableCell className="font-mono text-gray-600 whitespace-nowrap">
+                      <TableCell className="font-mono text-gray-600 whitespace-nowrap text-center">
                         {item.packet_weight || 0}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         <span className="font-bold text-emerald-700">
                           {item.price
                             ? `$${parseFloat(item.price).toFixed(2)}`
                             : "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         {item.date_exp
                           ? new Date(item.date_exp).toLocaleDateString()
                           : "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-indigo-600 whitespace-nowrap">
+                      <TableCell className="font-mono text-indigo-600 whitespace-nowrap text-center">
                         {item.GTIP || "—"}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         {!item.ismain_item && item.parent_item ? (
-                          <span className="text-slate-600 flex items-center gap-1">
+                          <span className="text-slate-600 flex items-center justify-center gap-1">
                             <LinkIcon size={12} />{" "}
                             {item.parent_item.item_ar_name}
                           </span>
@@ -980,7 +1226,7 @@ export default function CompanyItemsPage() {
                           "—"
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         {item.ismain_item ? (
                           <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">
                             أساسي
@@ -991,7 +1237,7 @@ export default function CompanyItemsPage() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-center">
                         {item.isActive ? (
                           <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
                             فعال
@@ -1004,6 +1250,22 @@ export default function CompanyItemsPage() {
                       </TableCell>
                       <TableCell className="text-center sticky left-0 bg-white shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">
                         <div className="flex justify-center items-center gap-2">
+                          {item.ismain_item && hasPermission(PERMISSIONS.CREATE_COMP_ITEM) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedMainItemForFlavors(item);
+                                setFlavorsList([]);
+                                setFlavorInput("");
+                                setIsAddFlavorsOpen(true);
+                              }}
+                              className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 h-8 w-8 rounded-lg"
+                              title="إضافة نكهات"
+                            >
+                              <CopyPlus size={16} />
+                            </Button>
+                          )}
                           {hasPermission(PERMISSIONS.EDIT_COMP_ITEM) && (
                             <Button
                               variant="ghost"
@@ -1032,8 +1294,169 @@ export default function CompanyItemsPage() {
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <div className="text-sm text-slate-500 font-medium">
+                عرض {((currentPage - 1) * itemsPerPage) + 1} إلى {Math.min(currentPage * itemsPerPage, filteredData.length)} من أصل {filteredData.length} صنف
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-xl border-slate-200 h-9"
+                >
+                  <ChevronRight size={16} className="ml-1" />
+                  السابق
+                </Button>
+                <div className="text-sm font-bold text-emerald-700 mx-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
+                  {currentPage} / {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="rounded-xl border-slate-200 h-9"
+                >
+                  التالي
+                  <ChevronLeft size={16} className="mr-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent
+          className="sm:max-w-[420px] rounded-[32px] p-8 border-none shadow-2xl"
+          dir="rtl"
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <AlertTriangle className="text-rose-600" size={32} />
+            </div>
+            <DialogTitle className="font-black text-slate-900 text-xl">
+              حذف الصنف
+            </DialogTitle>
+            <DialogDescription className="font-bold text-slate-500 py-4">
+              هل أنت متأكد من حذف الصنف{" "}
+              <strong className="text-slate-900">{deleteTarget?.name}</strong>？
+              هذا الإجراء لا يمكن التراجع عنه.
+            </DialogDescription>
+          </div>
+          <DialogFooter className="gap-3 mt-4 flex sm:justify-center">
+            <Button
+              onClick={confirmDelete}
+              className="rounded-2xl h-12 flex-1 bg-rose-600 font-bold hover:bg-rose-700 transition-colors"
+            >
+              نعم، احذف
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="rounded-2xl h-12 flex-1 font-bold"
+            >
+              تراجع
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Flavors Dialog */}
+      <Dialog open={isAddFlavorsOpen} onOpenChange={setIsAddFlavorsOpen}>
+        <DialogContent
+          className="sm:max-w-[500px] h-[90vh] md:h-auto max-h-[90vh] rounded-[32px] p-0 border-none shadow-2xl flex flex-col overflow-hidden bg-white"
+          dir="rtl"
+        >
+          <div className="bg-white border-b border-slate-100 p-6 flex flex-col gap-2 relative shrink-0">
+            <DialogTitle className="font-black text-slate-800 text-2xl">
+              إضافة نكهات للصنف
+            </DialogTitle>
+            <DialogDescription className="font-bold text-slate-500 text-base">
+              أدخل النكهات وسيتم توريث خصائص الصنف الأساسي لها
+            </DialogDescription>
+            {selectedMainItemForFlavors && (
+              <div className="mt-4 p-4 rounded-2xl bg-slate-100/50 border border-slate-200">
+                <p className="text-xs font-bold text-slate-500 mb-1">الصنف الأساسي:</p>
+                <p className="text-base text-emerald-700 font-bold">{selectedMainItemForFlavors.item_ar_name}</p>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar flex flex-col gap-6">
+            <form onSubmit={handleAddFlavor} className="flex gap-2">
+              <Input
+                placeholder="اسم النكهة (مثال: تفاح، برتقال)"
+                value={flavorInput}
+                onChange={(e) => setFlavorInput(e.target.value)}
+                className="flex-1 rounded-2xl bg-white border-slate-200 focus-visible:ring-emerald-500/20"
+              />
+              <Button type="submit" variant="default" className="rounded-2xl shrink-0 gap-2 bg-emerald-600 hover:bg-emerald-700">
+                <Plus size={16} /> إضافة للنكهات
+              </Button>
+            </form>
+
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-700 flex items-center justify-between">
+                <span>قائمة النكهات المراد إضافتها</span>
+                <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full text-xs">{flavorsList.length}</span>
+              </h4>
+              {flavorsList.length === 0 ? (
+                <div className="text-center p-8 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-medium">
+                  لم تقم بتحديد أية نكهات بعد
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {flavorsList.map((flavor, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-100 shadow-sm transition-all hover:border-emerald-200">
+                      <div className="flex flex-col flex-1 truncate pl-3">
+                        <span className="font-bold text-emerald-700 text-sm mb-1 truncate">{flavor.name}</span>
+                        <span className="text-xs text-slate-500 truncate" title={flavor.generatedName}>الاسم: {flavor.generatedName}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveFlavor(index)}
+                        className="text-rose-400 hover:text-rose-600 hover:bg-rose-50 h-8 w-8 shrink-0 rounded-lg transition-colors"
+                      >
+                        <XCircle size={16} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="bg-white border-t border-slate-100 p-6 flex gap-3 shrink-0">
+            <Button
+              onClick={handleSaveFlavors}
+              disabled={flavorsList.length === 0 || isSavingFlavors}
+              className="flex-1 border-none rounded-2xl h-12 shadow-md hover:shadow-lg transition-all bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {isSavingFlavors ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  جاري الحفظ...
+                </span>
+              ) : (
+                "تأكيد الانشاء والحفظ"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsAddFlavorsOpen(false)}
+              className="rounded-2xl h-12 border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
+              disabled={isSavingFlavors}
+            >
+              إلغاء
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { v4 as uuidv4 } from "uuid";
+import { uploadToS3, deleteFromS3 } from "@/app/lib/s3";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -42,16 +40,9 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${uuidv4()}-${file.name}`;
-    const uploadDir = join(process.cwd(), "public", "uploads");
-
-    // Ensure upload dir exists
-    await mkdir(uploadDir, { recursive: true });
-
-    const filePath = join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
-
-    const fileUrl = `/uploads/${fileName}`;
+    
+    // Upload to S3 instead of local storage
+    const { fileUrl } = await uploadToS3(buffer, file.name, file.type, "documents");
 
     const doc = await prisma.document.create({
       data: {
@@ -64,9 +55,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // In a real scenario, we'd trigger a background job for AI processing here
-    // For now, we'll mark as pending and let the frontend poll or wait
-
     return NextResponse.json(doc);
   } catch (error) {
     console.error("Documents POST error:", error);
@@ -76,3 +64,43 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID missing" }, { status: 400 });
+    }
+
+    const doc = await prisma.document.findUnique({
+      where: { id: id },
+    });
+
+    if (!doc) {
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+
+    // Delete from S3
+    if (doc.fileUrl) {
+      await deleteFromS3(doc.fileUrl);
+    }
+
+    // Delete from database
+    await prisma.document.delete({
+      where: { id: id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Document DELETE error:", error);
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
+  }
+}
+

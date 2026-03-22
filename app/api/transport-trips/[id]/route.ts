@@ -39,6 +39,9 @@ export async function GET(
         source_container: {
           select: { id: true, container_number: true, container_type: true },
         },
+        source_shipment: {
+          select: { id: true, bl_number: true, sender_company_id: true },
+        },
         source_depot: {
           select: { id: true, depot_name: true },
         },
@@ -102,6 +105,7 @@ export async function PATCH(
       notes,
       route_type,
       source_company_id,
+      source_shipment_id,
       source_container_id,
       source_depot_id,
       destination_depot_id,
@@ -159,6 +163,7 @@ export async function PATCH(
         ...(notes !== undefined && { notes }),
         ...(route_type !== undefined && { route_type }),
         ...(source_company_id !== undefined && { source_company_id: source_company_id ? parseInt(source_company_id.toString()) : null }),
+        ...(source_shipment_id !== undefined && { source_shipment_id: source_shipment_id ? parseInt(source_shipment_id.toString()) : null }),
         ...(source_container_id !== undefined && { source_container_id: source_container_id ? parseInt(source_container_id.toString()) : null }),
         ...(source_depot_id !== undefined && { source_depot_id: source_depot_id ? parseInt(source_depot_id.toString()) : null }),
         ...(destination_depot_id !== undefined && { destination_depot_id: destination_depot_id ? parseInt(destination_depot_id.toString()) : null }),

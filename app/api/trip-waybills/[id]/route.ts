@@ -43,6 +43,9 @@ export async function GET(
         destination: {
           select: { id: true, destination_name: true, destination_type: true },
         },
+        sender_company: {
+          select: { id: true, company_name: true },
+        },
       },
     });
 
@@ -76,6 +79,7 @@ export async function PATCH(
     const {
       trader_id,
       destination_id,
+      sender_company_id,
       quantity,
       weight,
       notes,
@@ -127,6 +131,7 @@ export async function PATCH(
       data: {
         ...(trader_id !== undefined && { trader_id: trader_id ? parseInt(trader_id) : null }),
         ...(destination_id !== undefined && { destination_id: destination_id ? parseInt(destination_id) : null }),
+        ...(sender_company_id !== undefined && { sender_company_id: sender_company_id ? parseInt(sender_company_id) : null }),
         ...(quantity !== undefined && { quantity: quantity ? parseInt(quantity) : 0 }),
         ...(weight !== undefined && { weight: weight ? parseFloat(weight) : null }),
         ...(newAllocatedFare !== null && { allocated_fare: newAllocatedFare }),
@@ -148,6 +153,9 @@ export async function PATCH(
         },
         destination: {
           select: { id: true, destination_name: true },
+        },
+        sender_company: {
+          select: { id: true, company_name: true },
         },
       },
     });

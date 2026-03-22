@@ -21,6 +21,7 @@ import {
   FileText,
   Upload,
   Edit,
+  AlertTriangle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -64,23 +65,38 @@ const tripSchema = z.object({
   notes: z.string().optional().nullable(),
   route_type: z.string().optional(),
   source_company_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  source_shipment_id: z.union([z.string(), z.number(), z.null()]).optional(),
   source_container_id: z.union([z.string(), z.number(), z.null()]).optional(),
   source_depot_id: z.union([z.string(), z.number(), z.null()]).optional(),
   destination_depot_id: z.union([z.string(), z.number(), z.null()]).optional(),
-  waybills: z.array(z.object({
-    trader_id: z.union([z.string(), z.number()]).optional(),
-    destination_id: z.union([z.string(), z.number()]).optional(),
-    quantity: z.union([z.string(), z.number()]).optional(),
-    weight: z.union([z.string(), z.number()]).optional(),
-    notes: z.string().optional(),
-  })).optional(),
-  documents: z.array(z.object({
-    dbId: z.number().optional(),
-    document_type: z.string(),
-    document_number: z.string().optional().nullable(),
-    file_url: z.string(),
-    file_name: z.string(),
-  })).optional(),
+  waybills: z
+    .array(
+      z.object({
+        trader_id: z.union([z.string(), z.number()]).optional(),
+        destination_id: z.union([z.string(), z.number()]).optional(),
+        sender_company_id: z.union([z.string(), z.number()]).optional(),
+        receipt_num: z
+          .string()
+          .length(5, "رقم الوصل يجب أن يكون 5 أرقام")
+          .optional()
+          .or(z.literal("")),
+        quantity: z.union([z.string(), z.number()]).optional(),
+        weight: z.union([z.string(), z.number()]).optional(),
+        notes: z.string().optional(),
+      }),
+    )
+    .optional(),
+  documents: z
+    .array(
+      z.object({
+        dbId: z.number().optional(),
+        document_type: z.string(),
+        document_number: z.string().optional().nullable(),
+        file_url: z.string(),
+        file_name: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 type TripFormData = z.infer<typeof tripSchema>;
@@ -101,6 +117,7 @@ interface TransportTrip {
   notes: string | null;
   route_type: string | null;
   source_company_id: number | null;
+  source_shipment_id: number | null;
   source_container_id: number | null;
   source_depot_id: number | null;
   destination_depot_id: number | null;
@@ -116,6 +133,20 @@ interface TransportTrip {
     document_type: string;
     document_number?: string;
   }[];
+  source_company?: { id: number; company_name: string } | null;
+  source_container?: {
+    id: number;
+    container_number: string;
+    container_type: string | null;
+  } | null;
+  source_shipment?: {
+    id: number;
+    bl_number: string;
+    sender_company_id: number | null;
+    containers?: Container[];
+  } | null;
+  source_depot?: { id: number; depot_name: string } | null;
+  destination_depot?: { id: number; depot_name: string } | null;
 }
 
 interface TripWaybill {
@@ -123,13 +154,16 @@ interface TripWaybill {
   trip_id: number;
   trader_id: number | null;
   destination_id: number | null;
+  sender_company_id?: number | null;
   invoice_num: string | null;
+  receipt_num: string | null;
   quantity: number | null;
   weight: number | null;
   allocated_fare: number | null;
   notes: string | null;
   trader?: { id: number; trader_name: string; trader_code: string } | null;
   destination?: { id: number; destination_name: string } | null;
+  sender_company?: { id: number; company_name: string } | null;
 }
 
 interface Company {
@@ -155,10 +189,23 @@ interface Container {
   container_type: string | null;
 }
 
+interface Shipment {
+  id: number;
+  bl_number: string;
+  sender_company_id?: number | null;
+  status?: string;
+  containers?: Container[];
+}
+
 interface Gate {
   id: number;
   gate_name: string;
   gate_code: string | null;
+}
+
+interface Depot {
+  id: number;
+  depot_name: string;
 }
 
 interface TransportCompany {
@@ -188,13 +235,50 @@ export default function TransportTripsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [traders, setTraders] = useState<Trader[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
-  const [containers, setContainers] = useState<Container[]>([]);
   const [gates, setGates] = useState<Gate[]>([]);
+  const [depots, setDepots] = useState<Depot[]>([]);
+  const [arrivedShipments, setArrivedShipments] = useState<Shipment[]>([]);
   const [transportCompanies, setTransportCompanies] = useState<
     TransportCompany[]
   >([]);
 
   const [submitting, setSubmitting] = useState(false);
+
+  // ========= Delete Confirmation Dialog State =========
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "trip" | "waybill" | "document" | null;
+    id: number | null;
+    parentId?: number | null;
+    title: string;
+    description: string;
+  }>({ type: null, id: null, title: "", description: "" });
+
+  const confirmDelete = async () => {
+    if (!deleteTarget.type || !deleteTarget.id) return;
+    try {
+      if (deleteTarget.type === "trip") {
+        await apiClient.deleteTransportTrip(deleteTarget.id!);
+        toast.success("تم حذف الرحلة بنجاح");
+      } else if (deleteTarget.type === "waybill") {
+        await apiClient.deleteTripWaybill(deleteTarget.id!);
+        toast.success("تم حذف البوليصة بنجاح");
+      } else if (deleteTarget.type === "document" && deleteTarget.parentId) {
+        await apiClient.deleteTransportTripDocument(
+          deleteTarget.parentId,
+          deleteTarget.id!,
+        );
+        toast.success("تم حذف المستند بنجاح");
+      }
+      fetchTrips();
+    } catch (error) {
+      console.error("Delete error", error);
+      toast.error("حدث خطأ أثناء الحذف");
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setDeleteTarget({ type: null, id: null, title: "", description: "" });
+    }
+  };
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -211,37 +295,39 @@ export default function TransportTripsPage() {
     truck_fare: "",
     notes: "",
     status: "DISPATCHED",
+    route_type: "FACTORY",
+    source_company_id: "",
+    source_shipment_id: "",
+    source_container_id: "",
+    source_depot_id: "",
+    destination_depot_id: "",
   });
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    watch,
-  } = useForm<TripFormData>({
-    resolver: zodResolver(tripSchema),
-    defaultValues: {
-      trip_number: "",
-      loading_date: "",
-      driver_name: "",
-      driver_phone: "",
-      plate_front: "",
-      plate_back: "",
-      gate_id: "",
-      transport_company_id: "",
-      sort_num: "",
-      discharge_date: "",
-      truck_fare: "",
-      notes: "",
-      route_type: "FACTORY",
-      source_company_id: "",
-      source_container_id: "",
-      source_depot_id: "",
-      destination_depot_id: "",
-      waybills: [],
-      documents: [],
-    },
-  });
+  const { register, control, handleSubmit, reset, watch } =
+    useForm<TripFormData>({
+      resolver: zodResolver(tripSchema),
+      defaultValues: {
+        trip_number: "",
+        loading_date: "",
+        driver_name: "",
+        driver_phone: "",
+        plate_front: "",
+        plate_back: "",
+        gate_id: "",
+        transport_company_id: "",
+        sort_num: "",
+        discharge_date: "",
+        truck_fare: "",
+        notes: "",
+        route_type: "FACTORY",
+        source_company_id: "",
+        source_shipment_id: "",
+        source_container_id: "",
+        source_depot_id: "",
+        destination_depot_id: "",
+        waybills: [],
+        documents: [],
+      },
+    });
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -291,32 +377,36 @@ export default function TransportTripsPage() {
         destinationsRes,
         gatesRes,
         transportCompaniesRes,
+        depotsRes,
       ] = await Promise.all([
         apiClient.getCompanies(),
         apiClient.getTraders(),
         apiClient.getDestinations(),
         apiClient.getGates(),
         apiClient.getTransportCompanies(),
+        apiClient.getDepots(),
       ]);
 
       setCompanies(companiesRes || []);
       setTraders(tradersRes || []);
       setDestinations(destinationsRes || []);
       setGates(gatesRes || []);
+      setDepots(depotsRes || []);
       setTransportCompanies(transportCompaniesRes || []);
 
-      // Fetch containers from shipments
       try {
-        const shipments = await apiClient.getShipments({ limit: 100 });
-        const allContainers: Container[] = [];
-        shipments?.forEach((shipment: { containers?: Container[] }) => {
-          if (shipment.containers) {
-            allContainers.push(...shipment.containers);
-          }
-        });
-        setContainers(allContainers);
+        const res = await apiClient.getShipments({ limit: 100 });
+        const shipmentsData = res?.shipments || [];
+        const arrived = shipmentsData.filter(
+          (s: Shipment) =>
+            s.status === "ARRIVED" ||
+            s.status === "وصلت المينا" ||
+            s.status === "IN_TRANSIT" ||
+            s.status === "في الطريق",
+        );
+        setArrivedShipments(arrived);
       } catch {
-        console.log("No containers found");
+        console.log("No shipments found");
       }
     } catch (error) {
       console.error("Failed to fetch dropdown data", error);
@@ -368,10 +458,21 @@ export default function TransportTripsPage() {
           : null,
         notes: data.notes || null,
         route_type: data.route_type || null,
-        source_company_id: data.source_company_id ? parseInt(data.source_company_id.toString()) : null,
-        source_container_id: data.source_container_id ? parseInt(data.source_container_id.toString()) : null,
-        source_depot_id: data.source_depot_id ? parseInt(data.source_depot_id.toString()) : null,
-        destination_depot_id: data.destination_depot_id ? parseInt(data.destination_depot_id.toString()) : null,
+        source_company_id: data.source_company_id
+          ? parseInt(data.source_company_id.toString())
+          : null,
+        source_shipment_id: data.source_shipment_id
+          ? parseInt(data.source_shipment_id.toString())
+          : null,
+        source_container_id: data.source_container_id
+          ? parseInt(data.source_container_id.toString())
+          : null,
+        source_depot_id: data.source_depot_id
+          ? parseInt(data.source_depot_id.toString())
+          : null,
+        destination_depot_id: data.destination_depot_id
+          ? parseInt(data.destination_depot_id.toString())
+          : null,
         documents: data.documents || [],
       };
 
@@ -390,12 +491,22 @@ export default function TransportTripsPage() {
               destination_id: waybill.destination_id
                 ? parseInt(waybill.destination_id.toString())
                 : null,
+              sender_company_id:
+                data.route_type === "PORT" && data.source_shipment_id
+                  ? arrivedShipments.find(
+                      (s) =>
+                        s.id.toString() === data.source_shipment_id?.toString(),
+                    )?.sender_company_id || null
+                  : waybill.sender_company_id
+                    ? parseInt(waybill.sender_company_id.toString())
+                    : null,
               quantity: waybill.quantity
                 ? parseInt(waybill.quantity.toString())
                 : null,
               weight: waybill.weight
                 ? parseFloat(waybill.weight.toString())
                 : null,
+              receipt_num: waybill.receipt_num || null,
               notes: waybill.notes || null,
             });
           }
@@ -414,16 +525,15 @@ export default function TransportTripsPage() {
     }
   };
 
-  const handleDeleteTrip = async (tripId: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذه الرحلة؟")) return;
-    try {
-      await apiClient.deleteTransportTrip(tripId);
-      fetchTrips();
-      toast.success("تم حذف الرحلة بنجاح");
-    } catch (error) {
-      console.error("Error deleting trip", error);
-      toast.error("حدث خطأ أثناء الحذف");
-    }
+  const handleDeleteTrip = (tripId: number) => {
+    setDeleteTarget({
+      type: "trip",
+      id: tripId,
+      title: "تأكيد حذف الرحلة",
+      description:
+        "هل أنت متأكد من حذف هذه الرحلة؟ سيتم حذف جميع المستندات والبوالص المرتبطة بها.",
+    });
+    setIsDeleteDialogOpen(true);
   };
 
   const toggleExpand = (tripId: number) => {
@@ -471,6 +581,12 @@ export default function TransportTripsPage() {
       truck_fare: trip.truck_fare?.toString() || "",
       notes: trip.notes || "",
       status: trip.status || "DISPATCHED",
+      route_type: trip.route_type || "FACTORY",
+      source_company_id: trip.source_company_id?.toString() || "",
+      source_shipment_id: trip.source_shipment_id?.toString() || "",
+      source_container_id: trip.source_container_id?.toString() || "",
+      source_depot_id: trip.source_depot_id?.toString() || "",
+      destination_depot_id: trip.destination_depot_id?.toString() || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -502,6 +618,22 @@ export default function TransportTripsPage() {
           : null,
         notes: editForm.notes || null,
         status: editForm.status,
+        route_type: editForm.route_type || null,
+        source_company_id: editForm.source_company_id
+          ? parseInt(editForm.source_company_id)
+          : null,
+        source_shipment_id: editForm.source_shipment_id
+          ? parseInt(editForm.source_shipment_id)
+          : null,
+        source_container_id: editForm.source_container_id
+          ? parseInt(editForm.source_container_id)
+          : null,
+        source_depot_id: editForm.source_depot_id
+          ? parseInt(editForm.source_depot_id)
+          : null,
+        destination_depot_id: editForm.destination_depot_id
+          ? parseInt(editForm.destination_depot_id)
+          : null,
       };
       await apiClient.updateTransportTrip(selectedTrip.id, payload);
       setIsEditDialogOpen(false);
@@ -528,8 +660,10 @@ export default function TransportTripsPage() {
     notes?: string | null;
   } | null>(null);
   const [waybillEditForm, setWaybillEditForm] = useState({
+    sender_company_id: "",
     trader_id: "",
     destination_id: "",
+    receipt_num: "",
     quantity: "",
     weight: "",
     notes: "",
@@ -541,14 +675,17 @@ export default function TransportTripsPage() {
     sender_company_id?: number | null;
     trader_id?: number | null;
     destination_id?: number | null;
+    receipt_num?: string | null;
     quantity?: number | null;
     weight?: number | null;
     notes?: string | null;
   }) => {
     setSelectedWaybill(waybill);
     setWaybillEditForm({
+      sender_company_id: waybill.sender_company_id?.toString() || "",
       trader_id: waybill.trader_id?.toString() || "",
       destination_id: waybill.destination_id?.toString() || "",
+      receipt_num: waybill.receipt_num || "",
       quantity: waybill.quantity?.toString() || "",
       weight: waybill.weight?.toString() || "",
       notes: waybill.notes || "",
@@ -568,12 +705,16 @@ export default function TransportTripsPage() {
         destination_id: waybillEditForm.destination_id
           ? parseInt(waybillEditForm.destination_id)
           : null,
+        sender_company_id: waybillEditForm.sender_company_id
+          ? parseInt(waybillEditForm.sender_company_id)
+          : null,
         quantity: waybillEditForm.quantity
           ? parseInt(waybillEditForm.quantity)
           : null,
         weight: waybillEditForm.weight
           ? parseFloat(waybillEditForm.weight)
           : null,
+        receipt_num: waybillEditForm.receipt_num || null,
         notes: waybillEditForm.notes || null,
       });
       setIsEditWaybillOpen(false);
@@ -587,48 +728,55 @@ export default function TransportTripsPage() {
     }
   };
 
-  const handleDeleteWaybill = async (waybillId: number, tripId: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذه البوليصة؟")) return;
-    try {
-      await apiClient.deleteTripWaybill(waybillId);
-      await fetchTrips();
-      toast.success("تم حذف البوليصة بنجاح");
-    } catch (error) {
-      console.error("Error deleting waybill", error);
-      toast.error("لا يمكن حذف البوليصة");
-    }
-    // suppress unused variable warning
-    void tripId;
+  const handleDeleteWaybill = (waybillId: number, tripId: number) => {
+    setDeleteTarget({
+      type: "waybill",
+      id: waybillId,
+      parentId: tripId,
+      title: "تأكيد حذف البوليصة",
+      description:
+        "هل أنت متأكد من حذف هذه البوليصة؟ لا يمكن التراجع عن هذا الإجراء.",
+    });
+    setIsDeleteDialogOpen(true);
   };
 
-  const handleDeleteTripDocument = async (docId: number, tripId: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المستند؟")) return;
-    try {
-      await apiClient.deleteTransportTripDocument(tripId, docId);
-      await fetchTrips();
-      toast.success("تم حذف المستند بنجاح");
-    } catch (error) {
-      console.error("Error deleting document", error);
-      toast.error("حدث خطأ أثناء حذف المستند");
-    }
+  const handleDeleteTripDocument = (docId: number, tripId: number) => {
+    setDeleteTarget({
+      type: "document",
+      id: docId,
+      parentId: tripId,
+      title: "تأكيد حذف المستند",
+      description:
+        "هل أنت متأكد من حذف هذا المستند؟ لا يمكن التراجع عن هذا الإجراء.",
+    });
+    setIsDeleteDialogOpen(true);
   };
 
   // ========= Add Waybill to Existing Trip =========
   const [isAddWaybillOpen, setIsAddWaybillOpen] = useState(false);
   const [addWaybillTripId, setAddWaybillTripId] = useState<number | null>(null);
   const [addWaybillForm, setAddWaybillForm] = useState({
+    sender_company_id: "",
     trader_id: "",
     destination_id: "",
+    receipt_num: "",
     quantity: "",
     weight: "",
     notes: "",
   });
 
   const openAddWaybillDialog = (tripId: number) => {
+    const parentTrip = trips.find((t) => t.id === tripId);
     setAddWaybillTripId(tripId);
     setAddWaybillForm({
+      sender_company_id:
+        parentTrip?.route_type === "PORT" &&
+        parentTrip.source_shipment?.sender_company_id
+          ? parentTrip.source_shipment.sender_company_id.toString()
+          : "",
       trader_id: "",
       destination_id: "",
+      receipt_num: "",
       quantity: "",
       weight: "",
       notes: "",
@@ -649,12 +797,16 @@ export default function TransportTripsPage() {
         destination_id: addWaybillForm.destination_id
           ? parseInt(addWaybillForm.destination_id)
           : null,
+        sender_company_id: addWaybillForm.sender_company_id
+          ? parseInt(addWaybillForm.sender_company_id)
+          : null,
         quantity: addWaybillForm.quantity
           ? parseInt(addWaybillForm.quantity)
           : null,
         weight: addWaybillForm.weight
           ? parseFloat(addWaybillForm.weight)
           : null,
+        receipt_num: addWaybillForm.receipt_num || null,
         notes: addWaybillForm.notes || null,
       });
       setIsAddWaybillOpen(false);
@@ -696,15 +848,18 @@ export default function TransportTripsPage() {
       const uploadResult = await apiClient.uploadToS3(addDocFile);
       if (!uploadResult?.fileUrl) throw new Error("Upload failed");
 
-      await apiClient.request(`/api/transport-trips/${addDocTripId}/documents`, {
-        method: "POST",
-        body: JSON.stringify({
-          document_type: addDocForm.document_type,
-          document_number: addDocForm.document_number || null,
-          file_url: uploadResult.fileUrl,
-          file_name: addDocFile.name,
-        }),
-      });
+      await apiClient.request(
+        `/api/transport-trips/${addDocTripId}/documents`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            document_type: addDocForm.document_type,
+            document_number: addDocForm.document_number || null,
+            file_url: uploadResult.fileUrl,
+            file_name: addDocFile.name,
+          }),
+        },
+      );
       setIsAddDocOpen(false);
       await fetchTrips();
       toast.success("تم رفع المستند بنجاح");
@@ -720,8 +875,8 @@ export default function TransportTripsPage() {
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tighter">
-            إدارة النقل البري
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Truck className="text-primary" /> إدارة النقل البري
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
             إدارة رحلات الشاحنين والبضائع (Master-Detail)
@@ -746,6 +901,136 @@ export default function TransportTripsPage() {
             </DialogHeader>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Route Type & Destination Section (Moved to top) */}
+              <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 space-y-4">
+                <h3 className="font-bold text-sm text-primary border-b border-primary/10 pb-2">
+                  مسار الرحلة والوجهة
+                </h3>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold">نوع المسار</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        reset({ ...watch(), route_type: "FACTORY" })
+                      }
+                      className={cn(
+                        "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                        routeType === "FACTORY"
+                          ? "bg-primary text-white border-primary shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-primary/50",
+                      )}
+                    >
+                      مصنع (Factory)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => reset({ ...watch(), route_type: "PORT" })}
+                      className={cn(
+                        "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                        routeType === "PORT"
+                          ? "bg-primary text-white border-primary shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-primary/50",
+                      )}
+                    >
+                      ميناء (Port)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        reset({ ...watch(), route_type: "INTERNAL_DEPOT" })
+                      }
+                      className={cn(
+                        "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                        routeType === "INTERNAL_DEPOT"
+                          ? "bg-primary text-white border-primary shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-primary/50",
+                      )}
+                    >
+                      مستودع داخلي
+                    </button>
+                  </div>
+                </div>
+
+                {routeType === "PORT" && (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">
+                        الشحنة البحرية (وصلت المينا)
+                      </Label>
+                      <select
+                        {...register("source_shipment_id")}
+                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                      >
+                        <option value="">اختر الشحنة</option>
+                        {arrivedShipments.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.bl_number}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">الحاوية</Label>
+                      <select
+                        {...register("source_container_id")}
+                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                        disabled={!watch("source_shipment_id")}
+                      >
+                        <option value="">اختر الحاوية</option>
+                        {arrivedShipments
+                          .find(
+                            (s) =>
+                              s.id.toString() ===
+                              watch("source_shipment_id")?.toString(),
+                          )
+                          ?.containers?.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.container_number} ({c.container_type})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {routeType === "INTERNAL_DEPOT" && (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">
+                        المستودع المصدر
+                      </Label>
+                      <select
+                        {...register("source_depot_id")}
+                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                      >
+                        <option value="">اختر المستودع</option>
+                        {depots.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.depot_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">مستودع الوجهة</Label>
+                      <select
+                        {...register("destination_depot_id")}
+                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
+                      >
+                        <option value="">اختر المستودع</option>
+                        {depots.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.depot_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Trip Details Section */}
               <div className="bg-slate-50 p-4 rounded-2xl space-y-4">
                 <h3 className="font-bold text-sm text-slate-700 border-b pb-2">
@@ -781,7 +1066,7 @@ export default function TransportTripsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold">رقم الهاتف</Label>
+                    <Label className="text-xs font-bold">هاتف السائق</Label>
                     <Input
                       {...register("driver_phone")}
                       placeholder="رقم الهاتف"
@@ -794,7 +1079,7 @@ export default function TransportTripsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">
-                      لوحة القيادة (أمام)
+                      لوحة السيارة (أمامية)
                     </Label>
                     <Input
                       {...register("plate_front")}
@@ -805,7 +1090,7 @@ export default function TransportTripsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">
-                      لوحة القيادة (خلف)
+                      لوحة المقطورة (خلفية)
                     </Label>
                     <Input
                       {...register("plate_back")}
@@ -818,12 +1103,12 @@ export default function TransportTripsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold">البوابة</Label>
+                    <Label className="text-xs font-bold">المعبر الحدودي</Label>
                     <select
                       {...register("gate_id")}
                       className="w-full h-10 rounded-xl border border-gray-200 px-3"
                     >
-                      <option value="">اختر البوابة</option>
+                      <option value="">اختر المعبر</option>
                       {gates.map((gate) => (
                         <option key={gate.id} value={gate.id}>
                           {gate.gate_name}
@@ -866,7 +1151,7 @@ export default function TransportTripsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold">مبلغ الشاحنة</Label>
+                    <Label className="text-xs font-bold">كلفة الشحن ($)</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -876,121 +1161,6 @@ export default function TransportTripsPage() {
                       dir="ltr"
                     />
                   </div>
-                </div>
-
-                <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 space-y-4">
-                  <h3 className="font-bold text-sm text-primary border-b border-primary/10 pb-2">
-                    مسار الرحلة والوجهة
-                  </h3>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold">نوع المسار</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => reset({ ...watch(), route_type: 'FACTORY' })}
-                        className={cn(
-                          "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
-                          routeType === 'FACTORY' 
-                            ? "bg-primary text-white border-primary shadow-sm" 
-                            : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
-                        )}
-                      >
-                        مصنع (Factory)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => reset({ ...watch(), route_type: 'PORT' })}
-                        className={cn(
-                          "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
-                          routeType === 'PORT' 
-                            ? "bg-primary text-white border-primary shadow-sm" 
-                            : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
-                        )}
-                      >
-                        ميناء (Port)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => reset({ ...watch(), route_type: 'INTERNAL_DEPOT' })}
-                        className={cn(
-                          "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
-                          routeType === 'INTERNAL_DEPOT' 
-                            ? "bg-primary text-white border-primary shadow-sm" 
-                            : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
-                        )}
-                      >
-                        مستودع داخلي
-                      </button>
-                    </div>
-                  </div>
-
-                  {routeType === 'FACTORY' && (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
-                      <Label className="text-xs font-bold">المصنع المصدر</Label>
-                      <select
-                        {...register("source_company_id")}
-                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
-                      >
-                        <option value="">اختر المصنع</option>
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.company_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {routeType === 'PORT' && (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
-                      <Label className="text-xs font-bold">الحاوية المصدر</Label>
-                      <select
-                        {...register("source_container_id")}
-                        className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
-                      >
-                        <option value="">اختر الحاوية</option>
-                        {containers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.container_number} ({c.container_type})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {routeType === 'INTERNAL_DEPOT' && (
-                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold">المستودع المصدر</Label>
-                        <select
-                          {...register("source_depot_id")}
-                          className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
-                        >
-                          <option value="">اختر المستودع</option>
-                          {gates.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.gate_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold">مستودع الوجهة</Label>
-                        <select
-                          {...register("destination_depot_id")}
-                          className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white"
-                        >
-                          <option value="">اختر الوجهة</option>
-                          {gates.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.gate_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1061,7 +1231,7 @@ export default function TransportTripsPage() {
                 </div>
 
                 <div className="space-y-3 mt-4">
-                {docFields.map((doc, index) => (
+                  {docFields.map((doc, index) => (
                     <div
                       key={`doc-${index}`}
                       className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group"
@@ -1080,7 +1250,8 @@ export default function TransportTripsPage() {
                               className="text-[9px] py-0 px-1.5 rounded-full border-slate-100 font-bold"
                             >
                               {DOCUMENT_TYPES.find(
-                                (t) => t.value === String(doc.document_type || ""),
+                                (t) =>
+                                  t.value === String(doc.document_type || ""),
                               )?.label || String(doc.document_type || "")}
                             </Badge>
                             {doc.document_number && (
@@ -1096,7 +1267,9 @@ export default function TransportTripsPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => window.open(String(doc.file_url || ""), "_blank")}
+                          onClick={() =>
+                            window.open(String(doc.file_url || ""), "_blank")
+                          }
                           className="h-9 w-9 text-slate-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-colors"
                         >
                           <Search size={16} />
@@ -1107,7 +1280,11 @@ export default function TransportTripsPage() {
                           size="icon"
                           onClick={async () => {
                             if (doc.dbId) {
-                              if (confirm("هل أنت متأكد من حذف هذا المستند نهائياً؟")) {
+                              if (
+                                confirm(
+                                  "هل أنت متأكد من حذف هذا المستند نهائياً؟",
+                                )
+                              ) {
                                 try {
                                   removeDoc(index);
                                   toast.success("تم حذف المستند بنجاح");
@@ -1154,8 +1331,10 @@ export default function TransportTripsPage() {
                     size="sm"
                     onClick={() =>
                       append({
+                        sender_company_id: undefined,
                         trader_id: undefined,
                         destination_id: undefined,
+                        receipt_num: "",
                         quantity: undefined,
                         weight: undefined,
                         notes: "",
@@ -1187,7 +1366,39 @@ export default function TransportTripsPage() {
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-bold">
+                          الشركة المصدرة
+                        </Label>
+                        {routeType === "PORT" && watch("source_shipment_id") ? (
+                          <div className="w-full h-9 rounded-lg border border-slate-100 px-2 text-sm bg-slate-50 flex items-center font-bold text-slate-600">
+                            {companies.find(
+                              (c) =>
+                                c.id ===
+                                arrivedShipments.find(
+                                  (s) =>
+                                    s.id.toString() ===
+                                    watch("source_shipment_id")?.toString(),
+                                )?.sender_company_id,
+                            )?.company_name || "—"}
+                          </div>
+                        ) : (
+                          <select
+                            {...register(
+                              `waybills.${index}.sender_company_id` as const,
+                            )}
+                            className="w-full h-9 rounded-lg border border-slate-200 px-2 text-sm"
+                          >
+                            <option value="">اختر الشركة</option>
+                            {companies.map((company) => (
+                              <option key={company.id} value={company.id}>
+                                {company.company_name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
                       <div className="space-y-1">
                         <Label className="text-[10px] font-bold">التاجر</Label>
                         <select
@@ -1201,6 +1412,20 @@ export default function TransportTripsPage() {
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-bold">
+                          رقم الوصل (5 أرقام)
+                        </Label>
+                        <Input
+                          {...register(
+                            `waybills.${index}.receipt_num` as const,
+                          )}
+                          placeholder="00000"
+                          maxLength={5}
+                          className="rounded-lg h-9"
+                          dir="ltr"
+                        />
                       </div>
                     </div>
 
@@ -1243,8 +1468,7 @@ export default function TransportTripsPage() {
                         />
                       </div>
                     </div>
-
-                    </div>
+                  </div>
                 ))}
               </div>
 
@@ -1293,156 +1517,338 @@ export default function TransportTripsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">رقم الرحلة</Label>
-                <Input
-                  value={editForm.trip_number}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, trip_number: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
+            {/* Route Type & Destination Section (Moved to top) */}
+            <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 space-y-4">
+              <h3 className="font-bold text-sm text-primary border-b border-primary/10 pb-2">
+                مسار الرحلة والوجهة
+              </h3>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold">نوع المسار</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditForm({ ...editForm, route_type: "FACTORY" })
+                    }
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      editForm.route_type === "FACTORY"
+                        ? "bg-primary text-white border-primary shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-primary/50",
+                    )}
+                  >
+                    مصنع (Factory)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditForm({ ...editForm, route_type: "PORT" })
+                    }
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      editForm.route_type === "PORT"
+                        ? "bg-primary text-white border-primary shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-primary/50",
+                    )}
+                  >
+                    ميناء (Port)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditForm({ ...editForm, route_type: "INTERNAL_DEPOT" })
+                    }
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      editForm.route_type === "INTERNAL_DEPOT"
+                        ? "bg-primary text-white border-primary shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-primary/50",
+                    )}
+                  >
+                    مستودع داخلي
+                  </button>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">تاريخ التحميل</Label>
-                <Input
-                  type="date"
-                  value={editForm.loading_date}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, loading_date: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
-              </div>
+
+              {editForm.route_type === "PORT" && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold">
+                      الشحنة البحرية (وصلت المينا)
+                    </Label>
+                    <select
+                      value={editForm.source_shipment_id}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          source_shipment_id: e.target.value,
+                        })
+                      }
+                      className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white text-sm"
+                    >
+                      <option value="">اختر الشحنة</option>
+                      {arrivedShipments.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.bl_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold">الحاوية</Label>
+                    <select
+                      value={editForm.source_container_id}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          source_container_id: e.target.value,
+                        })
+                      }
+                      className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white text-sm"
+                      disabled={!editForm.source_shipment_id}
+                    >
+                      <option value="">اختر الحاوية</option>
+                      {arrivedShipments
+                        .find(
+                          (s) =>
+                            s.id.toString() === editForm.source_shipment_id,
+                        )
+                        ?.containers?.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.container_number} ({c.container_type})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {editForm.route_type === "INTERNAL_DEPOT" && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold">المستودع المصدر</Label>
+                    <select
+                      value={editForm.source_depot_id}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          source_depot_id: e.target.value,
+                        })
+                      }
+                      className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white text-sm"
+                    >
+                      <option value="">اختر المستودع</option>
+                      {depots.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.depot_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold">مستودع الوجهة</Label>
+                    <select
+                      value={editForm.destination_depot_id}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          destination_depot_id: e.target.value,
+                        })
+                      }
+                      className="w-full h-10 rounded-xl border border-gray-200 px-3 bg-white text-sm"
+                    >
+                      <option value="">اختر الوجهة</option>
+                      {depots.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.depot_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">اسم السائق</Label>
-                <Input
-                  value={editForm.driver_name}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, driver_name: e.target.value })
-                  }
-                  className="rounded-xl"
-                />
+
+            {/* Trip Details Section */}
+            <div className="bg-slate-50 p-4 rounded-2xl space-y-4">
+              <h3 className="font-bold text-sm text-slate-700 border-b pb-2">
+                بيانات الرحلة
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">رقم الرحلة</Label>
+                  <Input
+                    value={editForm.trip_number}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, trip_number: e.target.value })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">تاريخ التحميل</Label>
+                  <Input
+                    type="date"
+                    value={editForm.loading_date}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, loading_date: e.target.value })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">هاتف السائق</Label>
-                <Input
-                  value={editForm.driver_phone}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, driver_phone: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">اسم السائق</Label>
+                  <Input
+                    value={editForm.driver_name}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, driver_name: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">هاتف السائق</Label>
+                  <Input
+                    value={editForm.driver_phone}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, driver_phone: e.target.value })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">لوحة السيارة (أمامية)</Label>
-                <Input
-                  value={editForm.plate_front}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, plate_front: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">
+                    لوحة السيارة (أمامية)
+                  </Label>
+                  <Input
+                    value={editForm.plate_front}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, plate_front: e.target.value })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">
+                    لوحة المقطورة (خلفية)
+                  </Label>
+                  <Input
+                    value={editForm.plate_back}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, plate_back: e.target.value })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">لوحة المقطورة (خلفية)</Label>
-                <Input
-                  value={editForm.plate_back}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, plate_back: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">المعبر الحدودي</Label>
+                  <select
+                    value={editForm.gate_id}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, gate_id: e.target.value })
+                    }
+                    className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">-- اختر المعبر --</option>
+                    {gates.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.gate_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">شركة النقل</Label>
+                  <select
+                    value={editForm.transport_company_id}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        transport_company_id: e.target.value,
+                      })
+                    }
+                    className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">-- اختر الشركة --</option>
+                    {transportCompanies.map((tc) => (
+                      <option key={tc.id} value={tc.id}>
+                        {tc.trans_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">المعبر الحدودي</Label>
-                <select
-                  value={editForm.gate_id}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, gate_id: e.target.value })
-                  }
-                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">-- اختر المعبر --</option>
-                  {gates.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.gate_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">شركة النقل</Label>
-                <select
-                  value={editForm.transport_company_id}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      transport_company_id: e.target.value,
-                    })
-                  }
-                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">-- اختر الشركة --</option>
-                  {transportCompanies.map((tc) => (
-                    <option key={tc.id} value={tc.id}>
-                      {tc.trans_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">كلفة الشحن ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={editForm.truck_fare}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, truck_fare: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">تاريخ التفريغ</Label>
-                <Input
-                  type="date"
-                  value={editForm.discharge_date}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, discharge_date: e.target.value })
-                  }
-                  className="rounded-xl"
-                  dir="ltr"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-bold text-sm">الحالة</Label>
-                <select
-                  value={editForm.status}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, status: e.target.value })
-                  }
-                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
-                >
-                  <option value="DISPATCHED">مُرسلة</option>
-                  <option value="AT_BORDER">في المعبر</option>
-                  <option value="DELIVERED">تم التسليم</option>
-                </select>
+
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">ترتيب الدور</Label>
+                  <Input
+                    type="number"
+                    value={editForm.sort_num}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, sort_num: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">تاريخ التفريغ</Label>
+                  <Input
+                    type="date"
+                    value={editForm.discharge_date}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        discharge_date: e.target.value,
+                      })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">كلفة الشحن ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editForm.truck_fare}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, truck_fare: e.target.value })
+                    }
+                    className="rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-sm">الحالة</Label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, status: e.target.value })
+                    }
+                    className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="DISPATCHED">مُرسلة</option>
+                    <option value="AT_BORDER">في المعبر</option>
+                    <option value="DELIVERED">تم التسليم</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div className="space-y-1">
@@ -1485,10 +1891,7 @@ export default function TransportTripsPage() {
 
       {/* Edit Waybill Dialog */}
       <Dialog open={isEditWaybillOpen} onOpenChange={setIsEditWaybillOpen}>
-        <DialogContent
-          className="sm:max-w-[550px] rounded-2xl"
-          dir="rtl"
-        >
+        <DialogContent className="sm:max-w-[550px] rounded-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-right">
               تعديل بيانات البوليصة
@@ -1498,7 +1901,27 @@ export default function TransportTripsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateWaybill} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الشركة المصدرة</Label>
+                <select
+                  value={waybillEditForm.sender_company_id}
+                  onChange={(e) =>
+                    setWaybillEditForm({
+                      ...waybillEditForm,
+                      sender_company_id: e.target.value,
+                    })
+                  }
+                  className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">-- اختر الشركة --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="space-y-1">
                 <Label className="font-bold text-sm">التاجر</Label>
                 <select
@@ -1518,6 +1941,22 @@ export default function TransportTripsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">رقم الوصل (5 أرقام)</Label>
+                <Input
+                  value={waybillEditForm.receipt_num}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 5);
+                    setWaybillEditForm({
+                      ...waybillEditForm,
+                      receipt_num: val,
+                    });
+                  }}
+                  placeholder="00000"
+                  className="rounded-xl"
+                  dir="ltr"
+                />
               </div>
             </div>
             <div className="space-y-1">
@@ -1578,7 +2017,10 @@ export default function TransportTripsPage() {
               <textarea
                 value={waybillEditForm.notes}
                 onChange={(e) =>
-                  setWaybillEditForm({ ...waybillEditForm, notes: e.target.value })
+                  setWaybillEditForm({
+                    ...waybillEditForm,
+                    notes: e.target.value,
+                  })
                 }
                 rows={2}
                 className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background resize-none"
@@ -1623,7 +2065,37 @@ export default function TransportTripsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddWaybill} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">الشركة المصدرة</Label>
+                {trips.find((t) => t.id === addWaybillTripId)?.route_type ===
+                "PORT" ? (
+                  <div className="w-full h-10 border border-slate-100 rounded-xl px-3 flex items-center bg-slate-50 text-slate-600 font-bold text-xs overflow-hidden">
+                    {companies.find(
+                      (c) =>
+                        c.id.toString() === addWaybillForm.sender_company_id,
+                    )?.company_name || "—"}
+                  </div>
+                ) : (
+                  <select
+                    value={addWaybillForm.sender_company_id}
+                    onChange={(e) =>
+                      setAddWaybillForm({
+                        ...addWaybillForm,
+                        sender_company_id: e.target.value,
+                      })
+                    }
+                    className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">-- اختر الشركة --</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id.toString()}>
+                        {company.company_name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label className="font-bold text-sm">التاجر</Label>
                 <select
@@ -1643,6 +2115,19 @@ export default function TransportTripsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-sm">رقم الوصل (5 أرقام)</Label>
+                <Input
+                  value={addWaybillForm.receipt_num}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 5);
+                    setAddWaybillForm({ ...addWaybillForm, receipt_num: val });
+                  }}
+                  placeholder="00000"
+                  className="rounded-xl"
+                  dir="ltr"
+                />
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4">
@@ -1705,7 +2190,10 @@ export default function TransportTripsPage() {
               <textarea
                 value={addWaybillForm.notes}
                 onChange={(e) =>
-                  setAddWaybillForm({ ...addWaybillForm, notes: e.target.value })
+                  setAddWaybillForm({
+                    ...addWaybillForm,
+                    notes: e.target.value,
+                  })
                 }
                 rows={2}
                 className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background resize-none"
@@ -1755,7 +2243,10 @@ export default function TransportTripsPage() {
               <select
                 value={addDocForm.document_type}
                 onChange={(e) =>
-                  setAddDocForm({ ...addDocForm, document_type: e.target.value })
+                  setAddDocForm({
+                    ...addDocForm,
+                    document_type: e.target.value,
+                  })
                 }
                 className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background"
               >
@@ -1771,7 +2262,10 @@ export default function TransportTripsPage() {
               <Input
                 value={addDocForm.document_number}
                 onChange={(e) =>
-                  setAddDocForm({ ...addDocForm, document_number: e.target.value })
+                  setAddDocForm({
+                    ...addDocForm,
+                    document_number: e.target.value,
+                  })
                 }
                 className="rounded-xl"
                 dir="ltr"
@@ -1885,29 +2379,62 @@ export default function TransportTripsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50">
-                <TableHead className="text-right"></TableHead>
-                <TableHead className="text-right font-bold">
+                <TableHead className="text-right whitespace-nowrap"></TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
                   رقم الرحلة
                 </TableHead>
-                <TableHead className="text-right font-bold">التاريخ</TableHead>
-                <TableHead className="text-right font-bold">السائق</TableHead>
-                <TableHead className="text-right font-bold">اللوحات</TableHead>
-                <TableHead className="text-right font-bold">الكلفة</TableHead>
-                <TableHead className="text-right font-bold">الحالة</TableHead>
-                <TableHead className="text-center font-bold">إجراءات</TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  ت. التحميل
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  المسار
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  المعبر
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  شركة النقل
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  السائق
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  الهاتف
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  لوحة (أمامية)
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  لوحة (خلفية)
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  الدور
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  ت. التفريغ
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  كلفة ($)
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  الحالة
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap">
+                  إجراءات
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={16} className="text-center py-8">
                     جاري التحميل...
                   </TableCell>
                 </TableRow>
               ) : trips.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={16}
                     className="text-center py-8 text-slate-400"
                   >
                     لا توجد رحلات مسجلة
@@ -1942,38 +2469,93 @@ export default function TransportTripsPage() {
                             )}
                           </Button>
                         </TableCell>
-                        <TableCell>
-                          <span className="font-bold">
+                        <TableCell className="text-center">
+                          <span className="font-bold whitespace-nowrap">
                             {trip.trip_number || `TRIP-${trip.id}`}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center whitespace-nowrap">
                           {trip.loading_date
                             ? new Date(trip.loading_date).toLocaleDateString(
                                 "ar-SA",
                               )
                             : "—"}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User size={14} className="text-slate-400" />
-                            <span>{trip.driver_name || "—"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-mono text-sm">
-                            {trip.plate_front} {trip.plate_back}
+                        <TableCell className="text-center whitespace-nowrap">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-xs font-bold",
+                              trip.route_type === "FACTORY"
+                                ? "bg-amber-100 text-amber-700"
+                                : trip.route_type === "PORT"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : trip.route_type === "INTERNAL_DEPOT"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-slate-100 text-slate-700",
+                            )}
+                          >
+                            {trip.route_type === "FACTORY"
+                              ? "مصنع"
+                              : trip.route_type === "PORT"
+                                ? "ميناء"
+                                : trip.route_type === "INTERNAL_DEPOT"
+                                  ? "مستودع داخلي"
+                                  : "—"}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          <span className="font-mono">
+                        <TableCell className="text-center whitespace-nowrap text-sm">
+                          {trip.gate?.gate_name || "—"}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap text-sm">
+                          {trip.transport_company?.trans_name || "—"}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap text-sm">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <User size={14} className="text-slate-400" />
+                            <span className="font-bold text-slate-800">
+                              {trip.driver_name || "—"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className="text-center whitespace-nowrap font-mono text-xs"
+                          dir="ltr"
+                        >
+                          {trip.driver_phone || "—"}
+                        </TableCell>
+                        <TableCell
+                          className="text-center whitespace-nowrap font-mono text-xs"
+                          dir="ltr"
+                        >
+                          {trip.plate_front || "—"}
+                        </TableCell>
+                        <TableCell
+                          className="text-center whitespace-nowrap font-mono text-xs"
+                          dir="ltr"
+                        >
+                          {trip.plate_back || "—"}
+                        </TableCell>
+                        <TableCell className="text-center font-bold text-sm">
+                          {trip.sort_num || "—"}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap text-sm">
+                          {trip.discharge_date
+                            ? new Date(trip.discharge_date).toLocaleDateString(
+                                "ar-SA",
+                              )
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap">
+                          <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
                             {trip.truck_fare
                               ? Number(trip.truck_fare).toLocaleString()
                               : "—"}
                           </span>
                         </TableCell>
-                        <TableCell>{getStatusBadge(trip.status)}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center whitespace-nowrap">
+                          {getStatusBadge(trip.status)}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap">
                           <div className="flex justify-center gap-1">
                             <Button
                               variant="ghost"
@@ -1996,7 +2578,7 @@ export default function TransportTripsPage() {
                       </TableRow>
                       {expandedTrip === trip.id && (
                         <TableRow key={`${trip.id}-waybills`}>
-                          <TableCell colSpan={8} className="bg-slate-50 p-4">
+                          <TableCell colSpan={11} className="bg-slate-50 p-4">
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
                                 <h4 className="font-bold text-sm flex items-center gap-2">
@@ -2017,10 +2599,16 @@ export default function TransportTripsPage() {
                                   <TableHeader>
                                     <TableRow className="bg-white">
                                       <TableHead className="text-right text-xs">
+                                        الشركة المصدرة
+                                      </TableHead>
+                                      <TableHead className="text-right text-xs">
                                         التاجر
                                       </TableHead>
                                       <TableHead className="text-right text-xs">
                                         الوجهة
+                                      </TableHead>
+                                      <TableHead className="text-center text-xs">
+                                        رقم الوصل
                                       </TableHead>
                                       <TableHead className="text-center text-xs">
                                         الوزن
@@ -2046,10 +2634,18 @@ export default function TransportTripsPage() {
                                         className="bg-white"
                                       >
                                         <TableCell className="text-xs">
+                                          {waybill.sender_company
+                                            ?.company_name || "—"}
+                                        </TableCell>
+                                        <TableCell className="text-xs">
                                           {waybill.trader?.trader_name || "—"}
                                         </TableCell>
                                         <TableCell className="text-xs">
-                                          {waybill.destination?.destination_name || "—"}
+                                          {waybill.destination
+                                            ?.destination_name || "—"}
+                                        </TableCell>
+                                        <TableCell className="text-center text-xs font-mono">
+                                          {waybill.receipt_num || "—"}
                                         </TableCell>
                                         <TableCell className="text-center text-xs font-mono">
                                           {waybill.weight
@@ -2076,7 +2672,11 @@ export default function TransportTripsPage() {
                                             <Button
                                               variant="outline"
                                               size="sm"
-                                              onClick={() => router.push(`/dashboard/transport-trips/${waybill.id}/invoice`)}
+                                              onClick={() =>
+                                                router.push(
+                                                  `/dashboard/transport-trips/${waybill.id}/invoice`,
+                                                )
+                                              }
                                               className="h-7 px-2 rounded-lg text-[10px] gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 transition-all font-black"
                                               title="إضافة وتعديل بنود الفاتورة"
                                             >
@@ -2086,7 +2686,9 @@ export default function TransportTripsPage() {
                                             <Button
                                               variant="ghost"
                                               size="icon"
-                                              onClick={() => openEditWaybillDialog(waybill)}
+                                              onClick={() =>
+                                                openEditWaybillDialog(waybill)
+                                              }
                                               className="h-7 w-7 text-blue-500 hover:bg-blue-50"
                                             >
                                               <Edit size={13} />
@@ -2094,7 +2696,12 @@ export default function TransportTripsPage() {
                                             <Button
                                               variant="ghost"
                                               size="icon"
-                                              onClick={() => handleDeleteWaybill(waybill.id, trip.id)}
+                                              onClick={() =>
+                                                handleDeleteWaybill(
+                                                  waybill.id,
+                                                  trip.id,
+                                                )
+                                              }
                                               className="h-7 w-7 text-rose-500 hover:bg-rose-50"
                                             >
                                               <Trash2 size={13} />
@@ -2158,7 +2765,12 @@ export default function TransportTripsPage() {
                                           <Button
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => window.open(doc.file_url, '_blank')}
+                                            onClick={() =>
+                                              window.open(
+                                                doc.file_url,
+                                                "_blank",
+                                              )
+                                            }
                                             className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
                                           >
                                             <Search size={14} />
@@ -2166,7 +2778,12 @@ export default function TransportTripsPage() {
                                           <Button
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => handleDeleteTripDocument(doc.id, trip.id)}
+                                            onClick={() =>
+                                              handleDeleteTripDocument(
+                                                doc.id,
+                                                trip.id,
+                                              )
+                                            }
                                             className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
                                           >
                                             <Trash2 size={14} />
@@ -2192,6 +2809,41 @@ export default function TransportTripsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* ==================== Custom Delete Confirmation Dialog ==================== */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent
+          className="sm:max-w-[400px] rounded-3xl p-8 border-none text-right"
+          dir="rtl"
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <AlertTriangle className="text-rose-600" size={32} />
+            </div>
+            <DialogTitle className="font-black text-slate-900 text-xl">
+              {deleteTarget.title}
+            </DialogTitle>
+            <DialogDescription className="font-bold text-slate-500 py-4">
+              {deleteTarget.description}
+            </DialogDescription>
+          </div>
+          <DialogFooter className="gap-3 mt-4 flex sm:justify-center">
+            <Button
+              onClick={confirmDelete}
+              className="rounded-2xl h-12 flex-1 bg-rose-600 font-bold hover:bg-rose-700 transition-colors"
+            >
+              نعم، احذف
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="rounded-2xl h-12 flex-1 font-bold"
+            >
+              تراجع
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

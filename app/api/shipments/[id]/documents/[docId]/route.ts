@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-
-const s3Client = new S3Client({
-  region: "auto",
-  endpoint: process.env.S3_ENDPOINT!,
-  credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY!,
-    secretAccessKey: process.env.S3_SECRET_KEY!,
-  },
-  forcePathStyle: true,
-});
+import { deleteFromS3 } from "@/app/lib/s3";
 
 export async function DELETE(
   req: NextRequest,
@@ -40,22 +30,9 @@ export async function DELETE(
       where: { id: documentId },
     });
 
-    // 3. Delete from S3
-    try {
-      const bucketName = process.env.S3_BUCKET_NAME!;
-      const fileUrl = document.file_url;
-      const parts = fileUrl.split(`${bucketName}/`);
-      const key = parts[parts.length - 1];
-
-      if (key) {
-        const command = new DeleteObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-        });
-        await s3Client.send(command).catch(e => console.error("S3 Delete failed:", e));
-      }
-    } catch (s3Error) {
-      console.error("Cleanup S3 failed after DB delete:", s3Error);
+    // 3. Delete from S3 using utility
+    if (document.file_url) {
+      await deleteFromS3(document.file_url);
     }
 
     return NextResponse.json({ success: true });
@@ -64,3 +41,4 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete document" }, { status: 500 });
   }
 }
+

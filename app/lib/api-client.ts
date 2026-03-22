@@ -105,11 +105,17 @@ class ApiClient {
     });
   }
 
-  async uploadToS3(file: File) {
+  async uploadToS3(file: File, folder?: string) {
     const formData = new FormData();
     formData.append("file", file);
+    
+    let url = "/api/upload-s3";
+    if (folder) {
+      url += `?folder=${encodeURIComponent(folder)}`;
+    }
+
     // Don't set Content-Type header for FormData - browser sets it with boundary
-    return this.request("/api/upload-s3", {
+    return this.request(url, {
       method: "POST",
       body: formData,
     });
@@ -411,6 +417,7 @@ class ApiClient {
     return this.request(`/api/destinations/${id}`, { method: "DELETE" });
   }
 
+
   // --- Units ---
   getUnits() {
     return this.request("/api/units");
@@ -518,7 +525,7 @@ class ApiClient {
   getInvoiceItems(waybillId: number | string) {
     return this.request(`/api/trip-waybills/${waybillId}/invoice-items`);
   }
-  saveInvoiceItems(waybillId: number | string, items: any[]) {
+  saveInvoiceItems(waybillId: number | string, items: Record<string, unknown>[]) {
     return this.request(`/api/trip-waybills/${waybillId}/invoice-items`, {
       method: "POST",
       body: JSON.stringify({ items }),

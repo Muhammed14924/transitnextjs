@@ -232,7 +232,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Edit, MapPin, Globe } from "lucide-react";
+import { Plus, Trash2, Edit, MapPin, Globe, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
   Table,
@@ -250,6 +250,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
@@ -289,6 +291,9 @@ export default function GatesPage() {
     connecting_country: "",
     isActive: true,
   });
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
   const fetchData = async () => {
     try {
@@ -348,15 +353,27 @@ export default function GatesPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من الحذف؟")) return;
+  const openDeleteDialog = (id: number) => {
+    const item = data.find((d) => d.id === id);
+    setDeleteTarget({ id, name: item?.gate_name || "هذا المعبر" });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await apiClient.deleteGate(id);
+      await apiClient.deleteGate(deleteTarget.id);
       toast.success("تم الحذف بنجاح");
+      setIsDeleteDialogOpen(false);
+      setDeleteTarget(null);
       fetchData();
     } catch (e) {
       toast.error("خطأ في الحذف");
     }
+  };
+
+  const handleDelete = async (id: number) => {
+    openDeleteDialog(id);
   };
 
   return (
@@ -634,7 +651,7 @@ export default function GatesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(item.id)}
+                            onClick={() => openDeleteDialog(item.id)}
                             className="text-rose-500 hover:bg-rose-50"
                           >
                             <Trash2 size={16} />
@@ -649,6 +666,43 @@ export default function GatesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent
+          className="sm:max-w-[420px] rounded-[32px] p-8 border-none shadow-2xl"
+          dir="rtl"
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="h-16 w-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <AlertTriangle className="text-rose-600" size={32} />
+            </div>
+            <DialogTitle className="font-black text-slate-900 text-xl">
+              حذف المعبر
+            </DialogTitle>
+            <DialogDescription className="font-bold text-slate-500 py-4">
+              هل أنت متأكد من حذف{" "}
+              <strong className="text-slate-900">{deleteTarget?.name}</strong>
+              ？ هذا الإجراء لا يمكن التراجعة عنه.
+            </DialogDescription>
+          </div>
+          <DialogFooter className="gap-3 mt-4 flex sm:justify-center">
+            <Button
+              onClick={confirmDelete}
+              className="rounded-2xl h-12 flex-1 bg-rose-600 font-bold hover:bg-rose-700 transition-colors"
+            >
+              نعم، احذف
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="rounded-2xl h-12 flex-1 font-bold"
+            >
+              تراجع
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

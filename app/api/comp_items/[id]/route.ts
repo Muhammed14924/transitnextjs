@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
+import { deleteFromS3 } from "@/app/lib/s3";
 
 export async function PATCH(
   req: Request,
@@ -55,6 +56,11 @@ export async function PATCH(
       composite_code = `${existingItem.companies.company_code}-${typeCode}-${formattedItemCode}`;
     }
 
+    // Handle image deletion if replaced
+    if (image !== undefined && existingItem.image && existingItem.image !== image) {
+      await deleteFromS3(existingItem.image);
+    }
+
     const updatedItem = await prisma.comp_items.update({
       where: { id: Number(id) },
       data: {
@@ -104,6 +110,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
+
+    const item = await prisma.comp_items.findUnique({ where: { id: Number(id) } });
+    if (item?.image) {
+      await deleteFromS3(item.image);
+    }
+
     await prisma.comp_items.delete({ where: { id: Number(id) } });
     return NextResponse.json({ success: true });
   } catch {
