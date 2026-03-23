@@ -60,7 +60,7 @@ export function getShipmentFreeTimeDetails(shipment: transit_shipments) {
   arrival.setHours(0, 0, 0, 0);
 
   const expirationDate = new Date(arrival);
-  expirationDate.setDate(arrival.getDate() + shipment.free_time_days);
+  expirationDate.setDate(arrival.getDate() + (shipment.free_time_days - 1));
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
