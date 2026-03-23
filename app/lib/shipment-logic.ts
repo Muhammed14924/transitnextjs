@@ -133,3 +133,55 @@ export function generateAlertForShipment(shipment: transit_shipments): ShipmentA
 
   return null;
 }
+
+export function getShipmentTimingDetails(shipment: transit_shipments) {
+  if (!shipment.arrival_date) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const arrival = new Date(shipment.arrival_date);
+  arrival.setHours(0, 0, 0, 0);
+
+  const created = new Date(shipment.createdAt);
+  created.setHours(0, 0, 0, 0);
+
+  const isArrived = today.getTime() >= arrival.getTime();
+
+  if (!isArrived) {
+    // Stage 1: In Sea (Moving towards port)
+    const totalTripDuration = arrival.getTime() - created.getTime();
+    const timePassed = today.getTime() - created.getTime();
+    const daysRemaining = Math.max(0, Math.ceil((arrival.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+    
+    // Progress is based on time since record creation
+    const progress = totalTripDuration > 0 
+      ? Math.min(100, Math.max(0, (timePassed / totalTripDuration) * 100)) 
+      : 0;
+
+    return {
+      stage: "TRANSIT",
+      label: "في البحر 🚢",
+      subLabel: `باقي ${daysRemaining} يوم للوصول`,
+      detail: `ت. الوصول: ${arrival.toLocaleDateString("ar-SA")}`,
+      progress,
+      color: "blue"
+    };
+  } else {
+    // Stage 2: At Port (Staying in port)
+    const daysAtPort = Math.max(1, Math.ceil((today.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const freeTime = shipment.free_time_days || 7;
+    
+    // Progress is based on stay duration relative to free time
+    const progress = Math.min(100, (daysAtPort / freeTime) * 100);
+
+    return {
+      stage: "PORT",
+      label: "في الميناء ⚓",
+      subLabel: `منذ ${daysAtPort} يوم/أيام`,
+      detail: `وصلت في: ${arrival.toLocaleDateString("ar-SA")}`,
+      progress,
+      color: daysAtPort >= freeTime ? "rose" : daysAtPort >= freeTime - 2 ? "amber" : "indigo"
+    };
+  }
+}

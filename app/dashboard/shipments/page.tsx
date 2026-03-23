@@ -51,7 +51,12 @@ import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/lib/utils";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
-import { calculateShipmentStatus, calculateContainerStatus, getShipmentFreeTimeDetails } from "@/app/lib/shipment-logic";
+import { 
+  calculateShipmentStatus, 
+  calculateContainerStatus, 
+  getShipmentFreeTimeDetails,
+  getShipmentTimingDetails 
+} from "@/app/lib/shipment-logic";
 
 // ===================== Types =====================
 interface Container {
@@ -602,6 +607,9 @@ export default function ShipmentsPage() {
                   Free Time
                 </TableHead>
                 <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  تتبع الزمن
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
                   وضعية الحاويات
                 </TableHead>
                 <TableHead className="text-center font-bold whitespace-nowrap text-xs">
@@ -699,6 +707,39 @@ export default function ShipmentsPage() {
                         <span className="font-mono font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
                           {s.free_time_days ?? "—"}
                         </span>
+                      </TableCell>
+                      <TableCell className="text-center py-3 min-w-[140px]">
+                        {(() => {
+                           const timing = getShipmentTimingDetails(s as any);
+                           if (!timing) return <span className="text-[10px] text-slate-400">—</span>;
+                           
+                           return (
+                             <div className="flex flex-col gap-1 px-2">
+                               <div className="flex justify-between items-center text-[9px] font-bold">
+                                 <span className={cn(
+                                   timing.stage === "TRANSIT" ? "text-blue-600" : timing.color === "rose" ? "text-rose-600" : "text-indigo-600"
+                                 )}>
+                                   {timing.label}: {timing.subLabel}
+                                 </span>
+                                 <span className="text-slate-400">{Math.round(timing.progress)}%</span>
+                               </div>
+                               <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                 <div 
+                                   className={cn(
+                                     "h-full transition-all duration-500",
+                                     timing.stage === "TRANSIT" ? "bg-blue-500" : 
+                                     timing.color === "rose" ? "bg-rose-500" : 
+                                     timing.color === "amber" ? "bg-amber-500" : "bg-indigo-500"
+                                   )}
+                                   style={{ width: `${timing.progress}%` }}
+                                 />
+                               </div>
+                               <span className="text-[8px] text-slate-400 text-right">
+                                 {timing.detail}
+                               </span>
+                             </div>
+                           )
+                        })()}
                       </TableCell>
                       <TableCell className="text-center py-3 min-w-[140px]">
                         {(() => {
