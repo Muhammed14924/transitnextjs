@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
+import { deleteFromS3 } from "@/app/lib/s3";
+import { resequenceItems } from "@/app/lib/item-utils";
 
 export async function GET(req: Request) {
   try {
@@ -127,5 +129,49 @@ export async function POST(req: Request) {
       { error: message },
       { status: 500 },
     );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role === "GUEST")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { ids } = await req.json();
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ error: "No IDs provided" }, { status: 400 });
+    }
+
+    // 1. Fetch items to get images and company IDs
+    const itemsToDelete = await prisma.comp_items.findMany({
+      where: { id: { in: ids } },
+      select: { image: true, company_name: true }
+    });
+
+    // 2. Clear affected company list for re-sequencing
+    const affectedCompanyIds = Array.from(new Set(itemsToDelete.map(i => i.company_name)));
+
+    // 3. Delete images from S3
+    for (const item of itemsToDelete) {
+      if (item.image) {
+        await deleteFromS3(item.image);
+      }
+    }
+
+    // 4. Delete items from DB
+    await prisma.comp_items.deleteMany({
+      where: { id: { in: ids } }
+    });
+
+    // 5. RE-SEQUENCE affected companies
+    for (const companyId of affectedCompanyIds) {
+      await resequenceItems(companyId);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Bulk delete error:", error);
+    return NextResponse.json({ error: "Error deleting items" }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   Trash2,
@@ -9,17 +9,21 @@ import {
   Link as LinkIcon,
   Box,
   Tag,
-  LayoutGrid,
   BarChart2,
   Image as ImageIcon,
   AlertTriangle,
   RefreshCw,
   Upload,
+  Layers,
   Search,
   CopyPlus,
   XCircle,
   ChevronLeft,
   ChevronRight,
+  Filter,
+  X,
+  Factory,
+  ListFilter
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/app/lib/utils";
@@ -45,11 +49,20 @@ import {
 } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/app/components/ui/select";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
 import { usePermissions } from "@/app/hooks/use-permissions";
 import { PERMISSIONS } from "@/app/lib/permissions";
 import { useRouter } from "next/navigation";
+import { Checkbox } from "@/app/components/ui/checkbox";
+import { DeleteConfirmDialog } from "@/app/components/ui/delete-dialog";
 
 export default function CompanyItemsPage() {
   const { hasPermission, loading: permLoading } = usePermissions();
@@ -101,6 +114,56 @@ export default function CompanyItemsPage() {
   } | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("all");
+
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const currentPageIds = currentData.map((item: any) => item.id);
+      setSelectedIds(Array.from(new Set([...selectedIds, ...currentPageIds])));
+    } else {
+      const currentPageIds = currentData.map((item: any) => item.id);
+      setSelectedIds(selectedIds.filter(id => !currentPageIds.includes(id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsDeletingBulk(true);
+    try {
+      await apiClient.deleteCompItems(selectedIds);
+      toast.success(`تم حذف ${selectedIds.length} أصناف بنجاح`);
+      setSelectedIds([]);
+      setIsBulkDeleteDialogOpen(false);
+      fetchData();
+    } catch (_e) {
+      toast.error("حدث خطأ أثناء الحذف المتعدد");
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  };
+
+  const sortedCompanies = useMemo(() => {
+    return companies
+      .map(c => ({
+        ...c,
+        count: data.filter((item: any) => item.company_name.toString() === c.id.toString()).length
+      }))
+      .filter(c => c.count > 0)
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 15);
+  }, [companies, data]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -168,9 +231,9 @@ export default function CompanyItemsPage() {
   };
 
   const filteredData = data.filter((item: any) => {
+    // 1. Search filter
     const searchStr = searchTerm.toLowerCase().trim();
-    if (!searchStr) return true;
-    return (
+    const matchesSearch = !searchStr || (
       item.item_ar_name?.toLowerCase().includes(searchStr) ||
       item.item_en_name?.toLowerCase().includes(searchStr) ||
       item.composite_code?.toLowerCase().includes(searchStr) ||
@@ -178,6 +241,14 @@ export default function CompanyItemsPage() {
       item.manufacturer_code?.toLowerCase().includes(searchStr) ||
       item.companies?.company_name?.toLowerCase().includes(searchStr)
     );
+
+    // 2. Company filter
+    const matchesCompany = selectedCompanyId === "all" || item.company_name.toString() === selectedCompanyId;
+
+    // 3. Type filter
+    const matchesType = selectedTypeId === "all" || item.item_type?.toString() === selectedTypeId;
+
+    return matchesSearch && matchesCompany && matchesType;
   });
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -1015,44 +1086,243 @@ export default function CompanyItemsPage() {
           detail="أصناف نشطة"
         />
         <ProductStatCard
-          title="فئات المنتجات"
-          value={loading ? "..." : types.length.toString()}
-          icon={<LayoutGrid size={20} />}
-          color="emerald"
-          detail="تصنيفات النظام"
-        />
-        <ProductStatCard
           title="الشركات المتعاونة"
           value={loading ? "..." : companies.length.toString()}
           icon={<BarChart2 size={20} />}
           color="rose"
           detail="ملاك البضائع"
         />
+        <ProductStatCard
+          title="فئات المنتجات"
+          value={loading ? "..." : types.length.toString()}
+          icon={<Layers size={20} />}
+          color="emerald"
+          detail="تصنيفات متنوعة"
+        />
       </div>
 
-      <Card className="rounded-2xl border-none shadow-sm bg-white overflow-hidden mt-6">
+      <Card className="rounded-2xl border-none shadow-sm bg-white overflow-hidden">
         <CardContent className="p-0">
-          <div className="p-4 border-b bg-slate-50/30 flex items-center justify-between gap-4">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <Input
-                placeholder="بحث عن صنف، شركة، كود..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="pr-10 bg-white border-slate-200 focus-visible:ring-primary/20 rounded-xl"
-              />
+          {!loading && !searchTerm && sortedCompanies.length > 0 && (
+            <div className="p-4 bg-slate-50/30 border-b space-y-3">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Filter size={14} className="text-primary/70" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">الوصول السريع حسب الشركة:</span>
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
+                <Badge 
+                  variant={selectedCompanyId === "all" ? "default" : "outline"}
+                  className={cn(
+                    "cursor-pointer px-4 py-2 rounded-xl transition-all whitespace-nowrap border-slate-200 shadow-sm",
+                    selectedCompanyId === "all" ? "bg-primary text-white" : "bg-white hover:bg-slate-50 text-slate-600 border-dashed"
+                  )}
+                  onClick={() => {
+                    setSelectedCompanyId("all");
+                    setCurrentPage(1);
+                  }}
+                >
+                  جميع الشركات ({data.length})
+                </Badge>
+                {sortedCompanies.map((c) => (
+                  <Badge 
+                    key={c.id}
+                    variant={selectedCompanyId === c.id.toString() ? "default" : "outline"}
+                    className={cn(
+                      "cursor-pointer px-4 py-2 rounded-xl transition-all whitespace-nowrap border-slate-200 group relative",
+                      selectedCompanyId === c.id.toString() 
+                        ? "bg-primary text-white shadow-md pr-6" 
+                        : "bg-white hover:bg-slate-100 text-slate-600 border-solid"
+                    )}
+                    onClick={() => {
+                      setSelectedCompanyId(c.id.toString());
+                      setCurrentPage(1);
+                    }}
+                  >
+                    {c.company_name} ({c.count})
+                    {selectedCompanyId === c.id.toString() && (
+                      <X 
+                        size={10} 
+                        className="mr-2 inline hover:text-rose-200 transition-colors" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCompanyId("all");
+                        }} 
+                      />
+                    )}
+                  </Badge>
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-slate-500 font-medium">
-              تم العثور على <span className="text-primary font-bold">{filteredData.length}</span> صنف
-            </p>
+          )}
+
+          <div className="p-4 border-b bg-slate-50/50 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+               {/* Search Box */}
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Input
+                  placeholder="بحث سريع بأي معلومة..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pr-10 bg-white border-slate-200 focus-visible:ring-primary/20 rounded-xl"
+                />
+              </div>
+
+              {/* Filters Group */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Reset Filters Icon */}
+                {(selectedCompanyId !== "all" || selectedTypeId !== "all" || searchTerm) && (
+                   <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => {
+                       setSearchTerm("");
+                       setSelectedCompanyId("all");
+                       setSelectedTypeId("all");
+                       setCurrentPage(1);
+                    }}
+                    className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg h-10 w-10 ring-1 ring-rose-100"
+                    title="تصفية الكل"
+                   >
+                     <RefreshCw size={16} />
+                   </Button>
+                )}
+
+                {/* Company Select */}
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedCompanyId}
+                    onValueChange={(val) => {
+                      setSelectedCompanyId(val);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px] h-10 rounded-xl border-slate-200 bg-white font-medium text-slate-700">
+                      <div className="flex items-center gap-2 truncate">
+                        <Factory size={14} className="text-primary/70 shrink-0" />
+                        <SelectValue placeholder="اختر الشـركة" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                      <SelectItem value="all" className="font-bold">كل الشـركات</SelectItem>
+                      {companies.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id.toString()}>
+                          {c.company_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Category Select */}
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedTypeId}
+                    onValueChange={(val) => {
+                      setSelectedTypeId(val);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[160px] h-10 rounded-xl border-slate-200 bg-white font-medium text-slate-700">
+                      <div className="flex items-center gap-2 truncate">
+                        <ListFilter size={14} className="text-primary/70 shrink-0" />
+                        <SelectValue placeholder="فـرز النوع" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                      <SelectItem value="all" className="font-bold">كل الأنواع</SelectItem>
+                      {types.map((t: any) => (
+                        <SelectItem key={t.id} value={t.id.toString()}>
+                          {t.item_type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Filters Result Count */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 mr-1 shadow-sm">
+                    <Filter size={12} />
+                    <span className="text-xs font-black">النتائج: {filteredData.length}</span>
+                 </div>
+                 
+                 {selectedCompanyId !== "all" && (
+                    <Badge variant="outline" className="px-3 py-1.5 text-[11px] gap-2 bg-blue-50/50 text-blue-700 border-blue-200/50 rounded-lg">
+                      <Factory size={10} />
+                      {companies.find(c => c.id.toString() === selectedCompanyId)?.company_name}
+                      <X size={10} className="cursor-pointer hover:text-rose-500" onClick={() => setSelectedCompanyId("all")} />
+                    </Badge>
+                 )}
+
+                  {selectedTypeId !== "all" && (
+                    <Badge variant="outline" className="px-3 py-1.5 text-[11px] gap-2 bg-emerald-50/50 text-emerald-700 border-emerald-200/50 rounded-lg">
+                      <ListFilter size={10} />
+                      {types.find(t => t.id.toString() === selectedTypeId)?.item_type}
+                      <X size={10} className="cursor-pointer hover:text-rose-500" onClick={() => setSelectedTypeId("all")} />
+                    </Badge>
+                 )}
+
+                 {searchTerm && (
+                    <Badge variant="outline" className="px-3 py-1.5 text-[11px] gap-2 bg-amber-50/50 text-amber-700 border-amber-200/50 rounded-lg">
+                      <Search size={10} />
+                      البحث: {searchTerm}
+                      <X size={10} className="cursor-pointer hover:text-rose-500" onClick={() => setSearchTerm("")} />
+                    </Badge>
+                 )}
+              </div>
+            </div>
           </div>
+
+          {/* Selection Actions Bar */}
+          {selectedIds.length > 0 && (
+            <div className="bg-primary/5 border-b p-3 flex items-center justify-between animate-in fade-in slide-in-from-top-1">
+              <div className="flex items-center gap-3">
+                <Badge variant="default" className="bg-primary hover:bg-primary font-bold px-3 py-1">
+                  {selectedIds.length} صنف مختار
+                </Badge>
+                <span className="text-sm font-bold text-primary">يمكنك تنفيذ إجراءات مجمعة على الأصناف المحددة</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  className="rounded-xl font-bold gap-2 px-4 shadow-sm"
+                  onClick={() => setIsBulkDeleteDialogOpen(true)}
+                  disabled={loading || isDeletingBulk}
+                >
+                  <Trash2 size={16} />
+                  حذف المحدد
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-xl font-bold bg-white"
+                  onClick={() => setSelectedIds([])}
+                >
+                  إلغاء التحديد
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50/50">
+                  <TableHead className="w-12 text-center py-4">
+                    <Checkbox
+                      checked={currentData.length > 0 && currentData.every((item: any) => selectedIds.includes(item.id))}
+                      onCheckedChange={(checked) => toggleSelectAll(!!checked)}
+                      aria-label="Select all"
+                      className="border-slate-300"
+                    />
+                  </TableHead>
                   <TableHead className="text-center font-bold py-4 whitespace-nowrap">
                     الشركة
                   </TableHead>
@@ -1135,10 +1405,20 @@ export default function CompanyItemsPage() {
                   currentData.map((item: any) => (
                     <TableRow
                       key={item.id}
-                      className={!item.ismain_item ? "bg-slate-50/30" : ""}
+                      className={cn(
+                        !item.ismain_item ? "bg-slate-50/30" : "",
+                        selectedIds.includes(item.id) ? "bg-primary/5" : ""
+                      )}
                     >
+                      <TableCell className="text-center">
+                         <Checkbox 
+                           checked={selectedIds.includes(item.id)}
+                           onCheckedChange={() => toggleSelect(item.id)}
+                           className="border-slate-300"
+                         />
+                      </TableCell>
                       <TableCell className="font-bold text-blue-900 whitespace-nowrap text-center">
-                        {item.companies?.company_name}
+                         {item.companies?.company_name}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-center">
                         <Badge
@@ -1457,6 +1737,13 @@ export default function CompanyItemsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <DeleteConfirmDialog
+         open={isBulkDeleteDialogOpen}
+         onOpenChange={setIsBulkDeleteDialogOpen}
+         title="حذف مجمع للأصناف"
+         itemName={`${selectedIds.length} أصناف مختارة`}
+         onConfirm={handleBulkDelete}
+      />
     </div>
   );
 }

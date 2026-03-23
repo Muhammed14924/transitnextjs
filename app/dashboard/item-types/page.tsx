@@ -257,7 +257,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Edit, Layers, FileText, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Edit, Layers, FileText, AlertTriangle, Search } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
   Table,
@@ -291,6 +291,7 @@ export default function ItemTypesPage() {
   const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (!permLoading && !hasPermission(PERMISSIONS.VIEW_ITEM_TYPE)) {
@@ -403,6 +404,15 @@ export default function ItemTypesPage() {
     openDeleteDialog(id);
   };
 
+  const filteredData = data.filter((item) => {
+    const searchLow = searchTerm.toLowerCase();
+    return (
+      (item.item_type || "").toLowerCase().includes(searchLow) ||
+      (item.typecode || "").toLowerCase().includes(searchLow) ||
+      (item.description || "").toLowerCase().includes(searchLow)
+    );
+  });
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
@@ -482,6 +492,28 @@ export default function ItemTypesPage() {
         )}
       </div>
 
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
+        <div className="relative w-full md:max-w-md">
+          <Search
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            size={18}
+          />
+          <Input
+            placeholder="بحث عن نوع رئيسي أو كود..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pr-10 bg-white border-slate-200 focus-visible:ring-primary/20 transition-all rounded-xl h-11"
+          />
+          {searchTerm && (
+            <div className="absolute left-3 top-1/2 -translate-y-1/2">
+              <Badge variant="secondary" className="text-[10px] h-5">
+                تم العثور على {filteredData.length}
+              </Badge>
+            </div>
+          )}
+        </div>
+      </div>
+
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent
           className="sm:max-w-[425px] rounded-2xl p-6 text-right"
@@ -557,16 +589,16 @@ export default function ItemTypesPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50/50">
-                <TableHead className="text-right font-bold py-4">
+                <TableHead className="text-center font-bold py-4">
                   الكود
                 </TableHead>
-                <TableHead className="text-right font-bold py-4">
+                <TableHead className="text-center font-bold py-4">
                   اسم النوع
                 </TableHead>
-                <TableHead className="text-right font-bold py-4">
+                <TableHead className="text-center font-bold py-4">
                   الوصف
                 </TableHead>
-                <TableHead className="text-right font-bold py-4">
+                <TableHead className="text-center font-bold py-4">
                   الحالة
                 </TableHead>
                 <TableHead className="text-center font-bold py-4 w-[100px]">
@@ -581,19 +613,19 @@ export default function ItemTypesPage() {
                     جاري التحميل...
                   </TableCell>
                 </TableRow>
-              ) : data.length === 0 ? (
+              ) : filteredData.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="text-center py-8 text-slate-500"
+                    className="text-center py-8 text-slate-500 font-bold"
                   >
-                    لا توجد بيانات
+                    {searchTerm ? `لا توجد نتائج تطابق "${searchTerm}"` : "لا توجد بيانات متاحة"}
                   </TableCell>
                 </TableRow>
               ) : (
-                data.map((item: any) => (
+                filteredData.map((item: any) => (
                   <TableRow key={item.id}>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge
                         variant="outline"
                         className="font-mono text-sm bg-slate-50"
@@ -601,13 +633,13 @@ export default function ItemTypesPage() {
                         {item.typecode}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-bold text-gray-900">
+                    <TableCell className="font-bold text-gray-900 text-center">
                       {item.item_type}
                     </TableCell>
-                    <TableCell className="text-gray-500">
+                    <TableCell className="text-gray-500 text-center">
                       {item.description || "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {item.isActive ? (
                         <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">
                           متاح
@@ -637,7 +669,7 @@ export default function ItemTypesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => openDeleteDialog(item.id)}
+                            onClick={() => handleDelete(item.id)}
                             className="text-rose-500 hover:bg-rose-50"
                           >
                             <Trash2 size={16} />

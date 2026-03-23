@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getCurrentUser } from "@/app/lib/auth";
 import { deleteFromS3 } from "@/app/lib/s3";
+import { resequenceItems } from "@/app/lib/item-utils";
 
 export async function PATCH(
   req: Request,
@@ -112,11 +113,17 @@ export async function DELETE(
     const { id } = await params;
 
     const item = await prisma.comp_items.findUnique({ where: { id: Number(id) } });
-    if (item?.image) {
+    if (!item) return NextResponse.json({ success: true });
+
+    if (item.image) {
       await deleteFromS3(item.image);
     }
 
+    const companyId = item.company_name;
     await prisma.comp_items.delete({ where: { id: Number(id) } });
+
+    // Ensure sequence is maintained after deletion
+    await resequenceItems(companyId);
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json(

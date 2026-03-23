@@ -37,6 +37,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const isCompanyItemsPage = pathname === "/dashboard/company-items";
+  const isItemTypesPage = pathname === "/dashboard/item-types";
 
   return (
     <header className="h-16 border-b border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-30">
@@ -49,8 +50,8 @@ export function Header({ onMenuClick }: HeaderProps) {
         >
           <Menu size={20} />
         </Button>
-
-        {!isCompanyItemsPage && (
+ 
+        {!isCompanyItemsPage && !isItemTypesPage && (
           <div className="relative w-full max-w-md hidden md:block">
             <Search
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"

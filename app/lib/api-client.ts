@@ -376,6 +376,12 @@ class ApiClient {
   async deleteCompItem(id: string | number) {
     return this.request(`/api/comp_items/${id}`, { method: "DELETE" });
   }
+  async deleteCompItems(ids: number[]) {
+    return this.request("/api/comp_items", {
+      method: "DELETE",
+      body: JSON.stringify({ ids }),
+    });
+  }
 
   // --- Transport Companies ---
   getTransportCompanies() {
