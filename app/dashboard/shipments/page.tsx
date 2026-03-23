@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
-  Clock,
   ShipWheel,
   Layers,
   AlertTriangle,
@@ -178,7 +177,10 @@ export default function ShipmentsPage() {
     pending: 0,
     delivered: 0,
     inTransit: 0,
+    approachingPenalty: 0,
   });
+  const [isUrgentModalOpen, setIsUrgentModalOpen] = useState(false);
+  const [urgentShipments, setUrgentShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedShipment, setExpandedShipment] = useState<number | null>(null);
@@ -291,13 +293,25 @@ export default function ShipmentsPage() {
     try {
       setLoading(true);
       const data = await apiClient.getShipments({ limit: 50, q: searchTerm });
-      if (data) {
-        setShipmentsData(data.shipments || []);
-        setTotal(data.total || 0);
-        if (data.stats) {
-          setStats(data.stats);
+        if (data) {
+          const sData = data.shipments || [];
+          setShipmentsData(sData);
+          setTotal(data.total || 0);
+
+          // Calculate approaching penalty count (1 day remaining)
+          const urgent = sData.filter((s: any) => {
+            const details = getShipmentFreeTimeDetails(s);
+            return details && details.daysRemaining === 1 && !details.isExpired;
+          });
+          setUrgentShipments(urgent);
+
+          if (data.stats) {
+            setStats({
+              ...data.stats,
+              approachingPenalty: urgent.length
+            });
+          }
         }
-      }
     } catch (error) {
       console.error("Failed to fetch shipments", error);
       toast.error("فشل في تحميل الشحنات");
@@ -535,11 +549,12 @@ export default function ShipmentsPage() {
           detail="جميع الشحنات المسجلة"
         />
         <MiniStatsCard
-          title="قيد الانتظار"
-          value={loading ? "..." : stats.pending.toString()}
-          icon={<Clock size={18} />}
+          title="شحنات حرجة (باقي يوم)"
+          value={loading ? "..." : stats.approachingPenalty.toString()}
+          icon={<AlertTriangle size={18} />}
           color="amber"
-          detail="تحتاج معالجة"
+          detail="تنتهي فترة سماحها غداً"
+          onClick={() => setIsUrgentModalOpen(true)}
         />
         <MiniStatsCard
           title="مكتملة"
@@ -1591,6 +1606,90 @@ export default function ShipmentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Urgent Shipments Modal */}
+      <Dialog open={isUrgentModalOpen} onOpenChange={setIsUrgentModalOpen}>
+        <DialogContent className="sm:max-w-[700px] rounded-[32px] p-0 overflow-hidden border-none shadow-2xl" dir="rtl">
+          <div className="bg-amber-50/50 p-6 border-b border-amber-100/50">
+             <div className="flex items-center gap-3">
+               <div className="h-12 w-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shadow-sm">
+                 <AlertTriangle size={24} />
+               </div>
+               <div>
+                  <DialogTitle className="text-xl font-black text-slate-900 text-xl">شحنات تنتهي مهلتها غداً</DialogTitle>
+                  <DialogDescription className="text-amber-700/70 font-bold text-xs mt-1">
+                    هذه الشحنات لديها أقل من 24 ساعة لإنهاء إجراءات التخليص قبل دخول فترة الغرامات.
+                  </DialogDescription>
+               </div>
+             </div>
+          </div>
+          
+          <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar bg-white">
+            {urgentShipments.length > 0 ? (
+              <div className="space-y-3">
+                {urgentShipments.map((s) => (
+                  <div 
+                    key={s.id} 
+                    className="group p-4 bg-white border border-slate-100 rounded-2xl hover:border-amber-200 hover:shadow-lg hover:shadow-amber-500/5 transition-all flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-amber-500 group-hover:bg-amber-50 transition-colors">
+                        <Ship size={20} />
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-900 text-sm">BL: {s.bl_number}</p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-0.5">{s.sender_company?.company_name || 'شركة غير محددة'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-8">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-[10px] text-slate-400 font-bold">تاريخ الوصول</p>
+                        <p className="text-xs font-black text-slate-700">{s.arrival_date ? new Date(s.arrival_date).toLocaleDateString('ar-SA') : '—'}</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => {
+                          setIsUrgentModalOpen(false);
+                          setTimeout(() => {
+                            setSelectedShipment(s);
+                            form.reset({
+                              ...s,
+                              shipping_company: s.shipping_company?.toString(),
+                              sender_company_id: s.sender_company_id?.toString(),
+                              sub_company_id: s.sub_company_id?.toString(),
+                              port_of_loading: s.port_of_loading?.toString(),
+                              port_of_discharge: s.port_of_discharge?.toString(),
+                            } as any);
+                            setIsEditDialogOpen(true);
+                          }, 100);
+                        }}
+                        className="rounded-xl h-9 px-4 text-xs font-bold text-amber-600 hover:bg-amber-50 gap-2 border border-transparent hover:border-amber-100"
+                      >
+                        معالجة فوراً <Edit size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-slate-400 font-bold text-sm">لا توجد شحنات حرجة تنتهي غداً</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="p-4 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsUrgentModalOpen(false)}
+              className="rounded-xl h-10 px-8 font-bold border-slate-200"
+            >
+              إغلاق
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1602,12 +1701,14 @@ function MiniStatsCard({
   detail,
   color,
   icon,
+  onClick,
 }: {
   title: string;
   value: string;
   detail: string;
   color: string;
   icon: React.ReactNode;
+  onClick?: () => void;
 }) {
   const colors: Record<string, string> = {
     blue: "bg-blue-50/50 text-blue-600 border-blue-100",
@@ -1618,8 +1719,10 @@ function MiniStatsCard({
 
   return (
     <div
+      onClick={onClick}
       className={cn(
-        "p-6 rounded-[24px] border border-slate-100 bg-white hover:shadow-xl transition-all group",
+        "p-6 rounded-[24px] border border-slate-100 bg-white transition-all group",
+        onClick ? "cursor-pointer hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]" : "hover:shadow-lg",
         colors[color],
       )}
     >
