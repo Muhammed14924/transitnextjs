@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getSessionUser, unauthorized, forbidden } from "@/app/lib/api-helper";
 import { hasPermission } from "@/app/lib/auth";
+import { calculateShipmentStatus, calculateContainerStatus } from "@/app/lib/shipment-logic";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
@@ -147,10 +148,17 @@ export async function PATCH(
         free_time_days: (body.free_time_days !== undefined && body.free_time_days !== null)
           ? parseInt(body.free_time_days) 
           : 14,
-        status: body.status || undefined,
+        status: calculateShipmentStatus({
+           ...body,
+           arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,
+           containers: body.containers?.map((c: any) => ({
+             ...c,
+             empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null
+           })) || []
+        } as any),
         isActive: body.isActive !== undefined ? body.isActive : undefined,
         containers: body.containers && body.containers.length > 0 ? {
-          create: body.containers.map((c: { container_number: string; container_type?: string; weight?: string; empty_return_date?: string; customs_declaration_number?: string; item_count?: string; notes?: string }) => ({
+          create: body.containers.map((c: any) => ({
             container_number: c.container_number,
             container_type: c.container_type || null,
             weight: c.weight ? parseFloat(c.weight) : null,
@@ -158,6 +166,7 @@ export async function PATCH(
             customs_declaration_number: c.customs_declaration_number || null,
             item_count: c.item_count ? parseInt(c.item_count) : null,
             notes: c.notes || null,
+            status: calculateContainerStatus(c, body.arrival_date ? new Date(body.arrival_date) : null),
           }))
         } : undefined,
         documents: incomingDocs.length > 0 ? {

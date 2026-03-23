@@ -433,6 +433,7 @@ model shipment_containers {
   customs_declaration_number String?   @db.VarChar(50) // Replaces old shipment_number
   item_count                 Int?      
   notes                      String?   @db.Text
+  status                     String    @default("IN_TRANSIT") @db.VarChar(20)
   
   shipment                   transit_shipments @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
   trip_sources               transport_trips[] @relation("TripSourceContainer")

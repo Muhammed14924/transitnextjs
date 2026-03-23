@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db";
 import { getSessionUser, unauthorized, forbidden } from "@/app/lib/api-helper";
 import { hasPermission } from "@/app/lib/auth";
+import { calculateShipmentStatus, calculateContainerStatus } from "@/app/lib/shipment-logic";
 
 export async function GET(req: Request) {
   try {
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
         prisma.transit_shipments.count({ where: { status: "PENDING" } }),
         prisma.transit_shipments.count({ where: { status: "DELIVERED" } }),
         prisma.transit_shipments.count({
-          where: { status: { in: ["IN_TRANSIT", "ARRIVED"] } },
+          where: { status: { in: ["IN_TRANSIT", "ARRIVED", "FULLY_RECEIVED"] } },
         }),
       ]);
 
@@ -118,7 +119,14 @@ export async function POST(req: Request) {
         arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,
         expected_discharge_date: body.expected_discharge_date ? new Date(body.expected_discharge_date) : null,
         free_time_days: body.free_time_days ? parseInt(body.free_time_days) : 14,
-        status: body.status || "PENDING",
+        status: calculateShipmentStatus({
+           ...body,
+           arrival_date: body.arrival_date ? new Date(body.arrival_date) : null,
+           containers: body.containers?.map((c: any) => ({
+             ...c,
+             empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null
+           })) || []
+        } as any),
         isActive: body.isActive !== undefined ? body.isActive : true,
         containers: body.containers && body.containers.length > 0 ? {
           create: body.containers.map((c: any) => ({
@@ -129,6 +137,7 @@ export async function POST(req: Request) {
             customs_declaration_number: c.customs_declaration_number || null,
             item_count: c.item_count ? parseInt(c.item_count) : null,
             notes: c.notes || null,
+            status: calculateContainerStatus(c, body.arrival_date ? new Date(body.arrival_date) : null),
           }))
         } : undefined,
         documents: body.documents && body.documents.length > 0 ? {

@@ -51,6 +51,7 @@ import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/lib/utils";
 import { apiClient } from "@/app/lib/api-client";
 import { toast } from "sonner";
+import { calculateShipmentStatus, calculateContainerStatus, getShipmentFreeTimeDetails } from "@/app/lib/shipment-logic";
 
 // ===================== Types =====================
 interface Container {
@@ -62,6 +63,7 @@ interface Container {
   customs_declaration_number?: string;
   item_count?: number;
   notes?: string;
+  status?: string;
 }
 interface Shipment {
   id: number;
@@ -121,6 +123,7 @@ const containerSchema = z.object({
   customs_declaration_number: z.string().optional().nullable(),
   item_count: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
 });
 
 const shipmentSchema = z.object({
@@ -241,9 +244,10 @@ export default function ShipmentsPage() {
 
   // ===================== Auto-Status Logic =====================
   const watchedArrivalDate = form.watch("arrival_date");
+  const watchedContainersValues = form.watch("containers");
+
   useEffect(() => {
     if (!watchedArrivalDate) {
-      // Default to IN_TRANSIT if no date is set for new shipments
       if (isAddDialogOpen && !form.getValues("status")) {
         form.setValue("status", "IN_TRANSIT");
       }
@@ -251,27 +255,33 @@ export default function ShipmentsPage() {
     }
 
     try {
-      const currentStatus = form.getValues("status");
-      // If already Delivered, we don't want to auto-revert to Arrived/EnRoute
-      if (currentStatus === "DELIVERED") return;
+      // 1. Update each container's status
+      const currentContainers = watchedContainersValues || [];
+      currentContainers.forEach((c, idx) => {
+        const cStatus = calculateContainerStatus(c as any, watchedArrivalDate ? new Date(watchedArrivalDate) : null);
+        if (form.getValues(`containers.${idx}.status`) !== cStatus) {
+          form.setValue(`containers.${idx}.status`, cStatus, { shouldValidate: true });
+        }
+      });
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // 2. Update shipment overall status
+      const shipmentStatus = calculateShipmentStatus({
+        ...form.getValues(),
+        arrival_date: watchedArrivalDate ? new Date(watchedArrivalDate) : null,
+        containers: currentContainers.map((c: any) => ({
+          ...c,
+          empty_return_date: c.empty_return_date ? new Date(c.empty_return_date) : null
+        }))
+      } as any);
 
-      const arrival = new Date(watchedArrivalDate);
-      arrival.setHours(0, 0, 0, 0);
-
-      const diffTime = arrival.getTime() - today.getTime();
-
-      if (diffTime > 0) {
-        form.setValue("status", "IN_TRANSIT");
-      } else {
-        form.setValue("status", "ARRIVED");
+      const currentShipmentStatus = form.getValues("status");
+      if (currentShipmentStatus !== shipmentStatus) {
+        form.setValue("status", shipmentStatus, { shouldValidate: true });
       }
     } catch (e) {
       console.error("Status calculation error:", e);
     }
-  }, [watchedArrivalDate, form, isAddDialogOpen]);
+  }, [watchedArrivalDate, watchedContainersValues, form, isAddDialogOpen]);
   const fetchShipments = useCallback(async () => {
     try {
       setLoading(true);
@@ -423,6 +433,7 @@ export default function ShipmentsPage() {
           customs_declaration_number: c.customs_declaration_number || "",
           item_count: c.item_count || undefined,
           notes: c.notes || "",
+          status: c.status || "IN_TRANSIT",
         })) || [],
       documents:
         shipment.documents?.map((d) => ({
@@ -466,9 +477,11 @@ export default function ShipmentsPage() {
   const statusLabel = (s: string) => {
     const map: Record<string, string> = {
       PENDING: "قيد الانتظار",
-      IN_TRANSIT: "في الطريق",
-      ARRIVED: "وصلت",
-      DELIVERED: "تم الاستلام",
+      IN_TRANSIT: "في الطريق 🚢",
+      ARRIVED: "وصلت المينا 📍",
+      DELIVERED: "تم الاستلام ✅",
+      RECEIVED: "تم الاستلام ✅",
+      FULLY_RECEIVED: "تم استلام الشحنة كاملة 📦",
     };
     return map[s] || s;
   };
@@ -589,6 +602,9 @@ export default function ShipmentsPage() {
                   Free Time
                 </TableHead>
                 <TableHead className="text-center font-bold whitespace-nowrap text-xs">
+                  وضعية الحاويات
+                </TableHead>
+                <TableHead className="text-center font-bold whitespace-nowrap text-xs">
                   الحالة / البيانات
                 </TableHead>
                 <TableHead className="text-center font-bold whitespace-nowrap text-xs">
@@ -684,12 +700,43 @@ export default function ShipmentsPage() {
                           {s.free_time_days ?? "—"}
                         </span>
                       </TableCell>
+                      <TableCell className="text-center py-3 min-w-[140px]">
+                        {(() => {
+                           const details = getShipmentFreeTimeDetails(s as any);
+                           if (!details) return <span className="text-[10px] text-slate-400">لا يوجد بيانات وصول</span>;
+                           
+                           return (
+                             <div className="flex flex-col gap-1 px-2">
+                               <div className="flex justify-between items-center text-[9px] font-bold">
+                                 <span className={cn(
+                                   details.isExpired ? "text-rose-600" : details.daysRemaining <= 2 ? "text-amber-600" : "text-emerald-600"
+                                 )}>
+                                   {details.isExpired ? `تأخير: ${Math.abs(details.daysRemaining)} يوم` : `باقي: ${details.daysRemaining} يوم`}
+                                 </span>
+                                 <span className="text-slate-400">{Math.round(details.progress)}%</span>
+                               </div>
+                               <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                 <div 
+                                   className={cn(
+                                     "h-full transition-all duration-500",
+                                     details.isExpired ? "bg-rose-500" : details.daysRemaining <= 2 ? "bg-amber-500" : "bg-emerald-500"
+                                   )}
+                                   style={{ width: `${details.progress}%` }}
+                                 />
+                               </div>
+                               <span className="text-[8px] text-slate-400 text-right">
+                                 تنتهي في: {details.expirationDate.toLocaleDateString("ar-SA")}
+                               </span>
+                             </div>
+                           )
+                        })()}
+                      </TableCell>
                       <TableCell className="py-3 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <Badge
                             className={cn(
                               "rounded-full px-3 py-0.5 text-[10px] font-bold border-none",
-                              s.status === "DELIVERED"
+                              s.status === "DELIVERED" || s.status === "FULLY_RECEIVED"
                                 ? "bg-emerald-50 text-emerald-600"
                                 : s.status === "PENDING"
                                   ? "bg-amber-50 text-amber-600"
@@ -698,7 +745,7 @@ export default function ShipmentsPage() {
                                     : "bg-blue-50 text-blue-600",
                             )}
                           >
-                            {statusLabel(s.status)}
+                            {statusLabel(calculateShipmentStatus(s as any))}
                           </Badge>
                           <div className="flex gap-3 text-[10px] font-medium text-slate-500">
                             <span className="flex items-center gap-0.5">
@@ -777,6 +824,9 @@ export default function ShipmentsPage() {
                                         العدد
                                       </TableHead>
                                       <TableHead className="text-right text-xs">
+                                        الحالة
+                                      </TableHead>
+                                      <TableHead className="text-right text-xs">
                                         ملاحظات
                                       </TableHead>
                                     </TableRow>
@@ -806,6 +856,22 @@ export default function ShipmentsPage() {
                                         </TableCell>
                                         <TableCell className="text-center text-xs">
                                           {container.item_count || "—"}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          <Badge
+                                            className={cn(
+                                              "rounded-full px-3 py-0.5 text-[10px] font-bold border-none",
+                                              container.status === "RECEIVED"
+                                                ? "bg-emerald-50 text-emerald-600"
+                                                : container.status === "ARRIVED"
+                                                  ? "bg-violet-50 text-violet-600"
+                                                  : "bg-blue-50 text-blue-600",
+                                            )}
+                                          >
+                                            {statusLabel(
+                                              calculateContainerStatus(container as any, s.arrival_date ? new Date(s.arrival_date) : null),
+                                            )}
+                                          </Badge>
                                         </TableCell>
                                         <TableCell className="text-xs text-slate-600">
                                           {container.notes || "—"}
@@ -1061,7 +1127,7 @@ export default function ShipmentsPage() {
               {/* -- Dates & Free Time -- */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  وصول متوقع *
+                  تاريخ الوصول *
                 </Label>
                 <Input
                   type="date"
@@ -1078,7 +1144,7 @@ export default function ShipmentsPage() {
                   </p>
                 )}
               </div>
-              <div className="space-y-2 text-right">
+              {/* <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
                   تفريغ متوقع
                 </Label>
@@ -1087,10 +1153,10 @@ export default function ShipmentsPage() {
                   {...form.register("expected_discharge_date")}
                   className="rounded-2xl h-12 bg-slate-50 border-none px-5"
                 />
-              </div>
+              </div> */}
               <div className="space-y-2 text-right">
                 <Label className="font-bold text-slate-700 pr-1">
-                  أيام العطل (Free Time)
+                  أيام السماح (Free Time)
                 </Label>
                 <Input
                   type="number"
@@ -1111,6 +1177,7 @@ export default function ShipmentsPage() {
                   <option value="PENDING">⏳ قيد الانتظار</option>
                   <option value="IN_TRANSIT">🚢 في الطريق</option>
                   <option value="ARRIVED">📍 وصلت المينا</option>
+                  <option value="FULLY_RECEIVED">📦 تم استلام الشحنة كاملة</option>
                   <option value="DELIVERED">✅ تم الاستلام</option>
                 </select>
                 <p className="text-[10px] text-slate-400 font-bold px-2">
@@ -1384,8 +1451,21 @@ export default function ShipmentsPage() {
                         <Input
                           {...form.register(`containers.${index}.notes`)}
                           className="h-10 rounded-xl bg-white border-none shadow-sm w-full"
-                          placeholder="مثلاً: بضاعة قابلة للكسر..."
+                           placeholder="مثلاً: بضاعة قابلة للكسر..."
                         />
+                      </div>
+                      <div className="md:col-span-1 space-y-1.5 text-right opacity-80 pointer-events-none">
+                        <Label className="text-[11px] font-black text-slate-500">
+                          حالة الحاوية (آلياً)
+                        </Label>
+                        <select
+                          {...form.register(`containers.${index}.status`)}
+                          className="w-full h-10 rounded-xl bg-slate-100 border-none px-4 text-xs font-black text-primary"
+                        >
+                          <option value="IN_TRANSIT">🚢 في الطريق</option>
+                          <option value="ARRIVED">📍 وصلت المينا</option>
+                          <option value="RECEIVED">✅ تم الاستلام</option>
+                        </select>
                       </div>
                     </div>
                   </Card>

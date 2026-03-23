@@ -3,7 +3,6 @@
 import { useAuth } from "@/app/providers/AuthProvider";
 import { usePathname } from "next/navigation";
 import {
-  Bell,
   Search,
   Menu,
   LogOut,
@@ -28,6 +27,7 @@ import {
   AvatarImage,
 } from "@/app/components/ui/avatar";
 import { Badge } from "@/app/components/ui/badge";
+import { NotificationDropdown } from "./NotificationDropdown";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -68,14 +68,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="flex items-center gap-2 md:gap-4">
         {/* Notifications */}
         <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-slate-500 hover:bg-slate-100 rounded-xl relative"
-          >
-            <Bell size={20} />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full border-2 border-white dark:border-slate-900"></span>
-          </Button>
+          <NotificationDropdown />
         </div>
 
         <DropdownMenu dir="rtl">
